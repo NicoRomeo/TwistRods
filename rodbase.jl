@@ -1,12 +1,3 @@
-using DifferentialEquations
-using StaticArrays
-using Plots
-using LaTeXStrings
-using Statistics
-using NLsolve
-import Random
-
-include("rodsim.jl")
 
 struct Rod
     n::Int32
@@ -26,17 +17,6 @@ struct Simulation
 end
 # Stochastic Dynamics of Elastic Rods
 # builds on the Discrete Elastic rods framework
-
-
-
-
-
-function main(args)
-
-
-
-
-end # function
 
 function dist(rod::Rod)
     midpoints = (rod.X .+ rod.X[[2:end; 1]]) ./2
