@@ -3,14 +3,23 @@
 
 using DifferentialEquations
 using StaticArrays
-using Plots
-using LaTeXStrings
 using Statistics
 using NLsolve
 using Random
 
 
 include("rodbase.jl")
+
+
+function runstep(args)
+
+end
+
+function runsim(args)
+
+end
+
+
 
 
 function main(args)
