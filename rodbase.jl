@@ -1,7 +1,7 @@
 
 ## Structure definitions
 
-abstract type aRod end
+abstract type aRod end # Abstract type for rods, closed or open
 
 mutable struct cRod <: aRod  # structure for closed rod
     n::Int32
@@ -35,7 +35,7 @@ end # struct
     midpoints(rod)
 
 returns array of midpoints of each edge  of the rod.
-Output length differs for closed or open rod
+Output shape differs for closed or open rod
 """
 function midpoints(rod::cRod)
     rod.midp = (rod.X + rod.X[[2:end; 1],:]) / 2.
