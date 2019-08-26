@@ -11,12 +11,29 @@ using Random
 include("rodbase.jl")
 
 
-function runstep(args)
+function runstep(rod::aRod, parama::Array{Real, 1})
+    # update midpoints, voronoi domains, ..
 
+    # bending force
+    bForce = bForce(rod, parama)
+
+    # compute new frame, compute twisting force
+    tForce =
+
+    # Extension
+
+    # interaction
 end
 
-function runsim(args)
+function runsim(sim::Simulation)
+    rod = sim.rod
+    param = sim.param
 
+    param_array = ...
+    N = get(sim.param, "N")
+    for i in range(N)
+        runstep(rod, param)
+    end
 end
 
 
