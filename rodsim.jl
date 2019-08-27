@@ -18,7 +18,7 @@ function runstep(rod::aRod, parama::Array{Real, 1})
     bForce = bForce(rod, parama)
 
     # compute new frame, compute twisting force
-    tForce =
+    tForce = 0.
 
     # Extension
 
@@ -29,17 +29,20 @@ function runsim(sim::Simulation)
     rod = sim.rod
     param = sim.param
 
-    param_array = ...
+    param_array = Array{Any}(undef, 5)
     N = get(sim.param, "N")
     for i in range(N)
-        runstep(rod, param)
+        runstep(rod, param_array)
     end
 end
 
 
 
 
-function main(args)
-
+function main()
+    X = rand(5, 3)
+    nTwist = 0.
+    rod = cRod(X, nTwist)
+    #print(rod)
 
 end
