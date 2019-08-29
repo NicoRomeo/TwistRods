@@ -13,11 +13,13 @@ include("rodbase.jl")
 
 
 function runstep(rod::aRod, parama::Array{T, 1}) where {T<:Number}
-    # update midpoints, voronoi domains, ..
+    # update Geometry and associated quantitites: midpoints, voronoi domains, ..
+    #update_edges(rod)
+    midpoints(rod)
+    vDom(rod)
+    kb(rod)
 
     # bending force
-    kb(rod)
-    vDom(rod)
     E = bEnergy(rod, parama[1])
     print(E)
     # compute new frame, compute twisting force

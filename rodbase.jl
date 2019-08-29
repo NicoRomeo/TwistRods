@@ -140,7 +140,7 @@ end # function
 
 Computes the material curvatures of the rod
 """
-function matcurve(rod::cRod)  ## omega_i^j in article
+function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
     omega = Array{Float64}(undef, rod.n, 2, 2)
     omega[1,1,1] = dot(rod.kb[1,:], rod.frame[end,3,:])
     omega[1,1,2] = - dot(rod.kb[1,:], rod.frame[end,2,:])
@@ -162,7 +162,7 @@ end # function
 """
     bEnergy(rod::cRod)
 
-documentation
+Computes the bending energy of the rod
 """
 function bEnergy(rod::cRod, alpha::Float64)
     E = 0.
