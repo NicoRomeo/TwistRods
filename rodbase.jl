@@ -7,6 +7,7 @@ struct cRod <: aRod  # structure for closed rod
     n::Int32  # number of points; For cRod  number of points = number of edges
     X::Array{Float64,2} # Array of the position vectors of the nodes
     nTwist::Float64 # natural twist
+    len::Float64  # Length
     midp::Array{Float64,2}
     edges::Array{Float64,2} # Array of the edges vectors
     voronoi::Array{Float64,1} # Integrated lengths of each segment
@@ -36,7 +37,8 @@ struct cRod <: aRod  # structure for closed rod
         end
         frame = cat(norm_edges, normal, binormal, dims=3)
         kb = Array{Float64}(undef, n, 3)
-        new(n, X, nTwist, midp, edges, vor, kb, zeros(Float64, n), frame)
+        len = sum([norm(edges[i,:]) for i in 1:n])
+        new(n, X, nTwist, len, midp, edges, vor, kb, zeros(Float64, n), frame)
     end # function
 end # struct
 
@@ -175,6 +177,33 @@ function bEnergy(rod::cRod, alpha::Float64)
     return E
 end # function
 
+"""
+    bForce(rod::cRod)
+
+Computes the bending energy of the rod, for an naturally isotropic straight rod
+"""
+function bForce(rod::cRod)
+    kb = rod.kb
+    edges = rod.edges
+    norm_edges = Array{Float64}(undef, rod.n)
+    for i in 1:rod.n
+        norm_edges[i] = norm(edges[i,:])
+    end
+    Fb = Array{Float64}(undef, rod.n, 3)
+    for i in 2:rod.n-1
+        ui = -((-2.* cross(edges[i,:], kb[i,:]) + (edges[i,:]*transpose(kb[i,:]) * kb[i,:]) +
+            (-2.* cross(edges[i-1,:], kb[i,:]) + (edges[i-1,:]*transpose(kb[i,:]) * kb[i,:])))/
+            (norm_edges[i-1]*norm_edges[i] + dot(edges[i,:], edges[i-1,:])))/rod.voronoi[i]
+
+        v = (-2.* cross(edges[i-2,:], kb[i-1,:]) + (edges[i-2,:]*transpose(kb[i-1,:]) * kb[i-1,:]))/(norm_edges[i-2]*norm_edges[i-1] + dot(edges[i-1,:], edges[i-2,:]))/rod.voronoi[i-1]
+
+        w = (-2.* cross(edges[i+1,:], kb[i+1,:]) + (edges[i+1,:]*transpose(kb[i+1,:]) * kb[i+1,:]))/(norm_edges[i]*norm_edges[i+1] + dot(edges[i,:], edges[i+1,:]))/rod.voronoi[i+1]
+
+        clamp_contrib = .5 * (rod.nTwist/rod.len) * (-kb[i-1,:]/norm_edges[i] + kb[i+1,:]/norm_edges[i] + (-1./norm_edges[i-1] + 1./norm_edges[i+1]) * kb[i,:])
+
+    end
+end
+
 
 ###### collision handling ####
 """
@@ -189,7 +218,6 @@ function dist(rod::aRod)
     R = -2*(Xm*Xm') + (L2 + L2')
     return R .^ 0.5  #distance between i'th and j'th links
 end # function
-
 
 
 
