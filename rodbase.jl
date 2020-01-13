@@ -72,7 +72,7 @@ function update_edges(rod::cRod)
 end # function
 
 function update_edges(rod::oRod)
-    rod.edges .= rod.X[2:end,:] .- rod.X
+    rod.edges .= rod.X[2:end,:] .- rod.X[1:end-1,:]
 end # function
 
 """
@@ -144,6 +144,7 @@ Computes the material curvatures of the rod
 """
 function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
     omega = Array{Float64}(undef, rod.n, 2, 2)
+
     omega[1,1,1] = dot(rod.kb[1,:], rod.frame[end,3,:])
     omega[1,1,2] = - dot(rod.kb[1,:], rod.frame[end,2,:])
 
@@ -190,7 +191,7 @@ function bForce(rod::cRod)
         norm_edges[i] = norm(edges[i,:])
     end
     Fb = Array{Float64}(undef, rod.n, 3)
-    for i in 2:rod.n-1
+    for i in 2:rod.n-1 ### TODO: handle edge cases i=2, i=n-1
         ui = -((-2.* cross(edges[i,:], kb[i,:]) + (edges[i,:]*transpose(kb[i,:]) * kb[i,:]) +
             (-2.* cross(edges[i-1,:], kb[i,:]) + (edges[i-1,:]*transpose(kb[i,:]) * kb[i,:])))/
             (norm_edges[i-1]*norm_edges[i] + dot(edges[i,:], edges[i-1,:])))/rod.voronoi[i]
@@ -200,6 +201,8 @@ function bForce(rod::cRod)
         w = (-2.* cross(edges[i+1,:], kb[i+1,:]) + (edges[i+1,:]*transpose(kb[i+1,:]) * kb[i+1,:]))/(norm_edges[i]*norm_edges[i+1] + dot(edges[i,:], edges[i+1,:]))/rod.voronoi[i+1]
 
         clamp_contrib = .5 * (rod.nTwist/rod.len) * (-kb[i-1,:]/norm_edges[i] + kb[i+1,:]/norm_edges[i] + (-1./norm_edges[i-1] + 1./norm_edges[i+1]) * kb[i,:])
+
+        # Fb[i,:] = (combination of ui, v, w, clamp_contrib...)
 
     end
 end
