@@ -19,9 +19,9 @@ struct cRod <: aRod  # structure for closed rod
         midp = (X + X[[2:end; 1],:]) / 2.
         edges = X[[2:end;1],:] - X
         vor = Array{Float64}(undef, n)
-        vor[1] = norm(X[1,:]) + norm(X[end,:])
+        vor[1] = norm(edges[1,:]) + norm(edges[end,:])
         for i in 2:n
-            vor[i] = norm(X[i,:]) + norm(X[i-1,:])
+            vor[i] = norm(edges[i,:]) + norm(edges[i-1,:])
         end
         normal = edges[[2:end;1],:] - edges
         for i in 1:n
@@ -81,9 +81,9 @@ updates the voronoi domains' lengths of a closed Rod.
 See voronoi(oRod) for equivalent function
 """
 function vDom(rod::cRod)
-    rod.voronoi[1] = norm(rod.X[1,:]) + norm(rod.X[end,:])
+    rod.voronoi[1] = norm(rod.edges[1,:]) + norm(rod.edges[end,:])
     for i in 2:rod.n
-        rod.voronoi[i] = norm(rod.X[i,:]) + norm(rod.X[i-1,:])
+        rod.voronoi[i] = norm(rod.edges[i,:]) + norm(rod.edges[i-1,:])
     end
 end # function
 
@@ -94,7 +94,7 @@ See voronoi(cRod) for equivalent function
 """
 function vDom(rod::oRod)
     for i in 1:(rod.n-1)
-        rod.voronoi[i] = norm(rod.X[i+1,:]) + norm(rod.X[i,:])
+        rod.voronoi[i] = norm(rod.edges[i+1,:]) + norm(rod.edges[i,:])
     end
 end # function
 
@@ -162,6 +162,16 @@ function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
     return omega
 end # function
 
+
+"""
+    skewmat(a::Array{Float64})
+
+Returns the skew-symmetric matrix such as for a and b 3-vectors, cross(a,b) = skewmat(a) * b
+"""
+function skewmat(a::Float64)
+    return [[0, -a[3], a[2]],[a[3], 0, -a[1]],[-a[2], a[1], 0]]
+end # function
+
 """
     bEnergy(rod::cRod)
 
@@ -206,6 +216,33 @@ function bForce(rod::cRod)
 
     end
 end
+
+
+"""
+    bEnergy(rod::oRod)
+
+Computes the bending energy of the rod
+"""
+function bEnergy(rod::oRod)
+    E = 0.
+    omega = rod.matcurve
+    for i in 1:rod.n
+        for j in 1:2
+            E += dot(omega[i,j,:], rod.B*omega[i,j,:])) / (2. * rod.voronoi[i])
+        end
+    end
+    return E
+end # function
+
+
+"""
+    bForce(rod::oRod)
+Computes the forces due to bending and twist elasticity
+
+"""
+function bForce(rod::oRod)
+
+end # function
 
 
 ###### collision handling ####
