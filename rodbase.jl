@@ -72,7 +72,9 @@ struct oRod <: aRod # structure for open rod
             vor[i] = (norm(edges[i,:]) + norm(edges[i-1,:])) / 2
         end
         normal = edges[[2:end],:] - edges[[1:end-1],:]
-        normal = append!([edges[1]],normal) #setting normal of first vertex
+        J = [0 -1;1 0]
+
+        normal = append!(J * edge[1,:],normal) #setting normal of first vertex
         for i in 1:n-1
             normalize!(normal[i,:])
         end
@@ -89,7 +91,6 @@ struct oRod <: aRod # structure for open rod
         len = sum([norm(edges[i,:]) for i in 1:n-1])
 
         #adding J (counterclockwise pi/2 rotation matrix)
-        J = [0 -1;1 0]
         new(n, X, nTwist, len, midp, edges, vor, kb, zeros(Float64, n), frame, J)
     end # function
 end # struct
