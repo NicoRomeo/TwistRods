@@ -234,7 +234,7 @@ end # function
 
 Returns the skew-symmetric matrix such as for a and b 3-vectors, cross(a,b) = skewmat(a) * b
 """
-function skewmat(a::Float64)
+function skewmat(a::Array{Float64})
     return [[0, -a[3], a[2]],[a[3], 0, -a[1]],[-a[2], a[1], 0]]
 end # function
 
