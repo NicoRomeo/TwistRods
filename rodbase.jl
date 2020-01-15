@@ -13,7 +13,8 @@ struct cRod <: aRod  # structure for closed rod
     voronoi::Array{Float64,1} # Integrated lengths of each segment
     kb::Array{Float64,2}  # Discrete curvature binormal scalar function.
     theta::Array{Float64,1} # array of twist angles
-    frame::Array{Float64,3} # array of the reference frame
+    frame::Array{Float64,3} # array of the reference
+    J::Matrix{Int8,2} #matrix that rotates vectors 90 degrees
     function cRod(X::Array{Float64,2}, nTwist::Float64)
         n = size(X)[1]
         midp = (X + X[[2:end; 1],:]) / 2.
@@ -38,7 +39,11 @@ struct cRod <: aRod  # structure for closed rod
         frame = cat(norm_edges, normal, binormal, dims=3)
         kb = Array{Float64}(undef, n, 3)
         len = sum([norm(edges[i,:]) for i in 1:n])
-        new(n, X, nTwist, len, midp, edges, vor, kb, zeros(Float64, n), frame)
+
+        #adding J (counterclockwise pi/2 rotation matrix)
+        J = [0 -1;1 0]
+
+        new(n, X, nTwist, len, midp, edges, vor, kb, zeros(Float64, n), frame, J)
     end # function
 end # struct
 
@@ -52,6 +57,69 @@ struct oRod <: aRod # structure for open rod
     kb::Array{Float64,1}  # Discrete curvature binormal scalar function.
     theta::Array{Float64,1}
     frame::Array{Float64,3}
+    J::Matrix{Int8,2}
+    function oRod(X::Array{Float64,2}, nTwist::Float64)
+        n = size(X)[1]
+        midp = (X[[1:end-1],:] + X[[2:end],:]) / 2.
+
+        edges = X[[2:end],:] - X[[1:end-1],:] # only n - 1 edges
+        altedges = append!([edges[1]],edges) #assigns first vertex first edge for binormal calculations
+
+        vor = Array{Float64}(undef,n)
+
+        """is this (below) right? The vor calcs for cRod don't
+        make sense either
+        """
+
+        for i in 1:n
+            vor[i] = norm(X[i,:]) + norm(X[i-1,:])
+        end
+
+        normal = edges[[2:end],:] - edges[[1:end-1],:]
+
+        normal = append!([edges[1]],normal) #setting normal of first and last vertices
+        normal = append!(normal,[edges[end]])
+
+        for i in 1:n
+            normalize!(normal[i,:])
+        end
+
+        binormal = Array{Float64}(undef,n-2,3)
+
+        """
+        not sure if assumptions made (below) are correct:
+
+        -normal exists for all n vertices
+        -however, each vertex doesn't have an edge (n vertices, n-1 edges)
+        -therefore, I assigned both vertex 1 & 2 the same edge (in altedge) to compute the binormal
+        -At the same time, I could assign both vertices n-1 and n the same edge
+        -???
+        """
+
+        for i in 1:n
+            binormal[i,:] = normalize!(cross(altedges[i,:],normal[i,:]))
+        end
+
+        norm_edges = Array{Float64}(undef,n-1,3)
+        for i in 1:n-1
+            norm_edges[i,:] = normalize(edges[i,:])
+        end
+
+        """
+        (below) cat fxn doesn't work because norm_edges, normal, binormal
+        don't all have the same dimension.
+
+        how to resolve this?
+        """
+
+        frame = cat(norm_edges, normal, binormal, dims=3)
+        kb = Array{Float64}(undef, n, 3)
+        len = sum([norm(edges[i,:]) for i in 2:n])
+
+        #adding J (counterclockwise pi/2 rotation matrix)
+        J = [0 -1;1 0]
+        new(n, X, nTwist, len, midp, edges, vor, kb, zeros(Float64, n), frame, J)
+
 end # struct
 
 struct Measure
