@@ -37,7 +37,7 @@ struct cRod <: aRod  # structure for closed rod
             norm_edges[i,:] = normalize(edges[i,:])
         end
         frame = cat(norm_edges, normal, binormal, dims=3)
-        kb = Array{Float64}(undef, n, 3)
+        kb = Array{Float64}(undef, n-2, 3)
         len = sum([norm(edges[i,:]) for i in 1:n])
 
         #adding J (counterclockwise pi/2 rotation matrix)
@@ -64,7 +64,8 @@ struct oRod <: aRod # structure for open rod
         edges = X[[2:end],:] - X[[1:end-1],:] # only n - 1 edges
         vor = Array{Float64}(undef,n)
         vor[1] = norm(edges[1,:]) / 2
-        for i in 2:n
+        vor[n] = nor(edges[n,:]) / 2
+        for i in 2:n-1
             vor[i] = (norm(edges[i,:]) + norm(edges[i-1,:])) / 2
         end
         normal = edges[[2:end],:] - edges[[1:end-1],:]
@@ -81,7 +82,7 @@ struct oRod <: aRod # structure for open rod
             norm_edges[i,:] = normalize(edges[i,:])
         end
         frame = cat(norm_edges, normal, binormal, dims=3)
-        kb = Array{Float64}(undef, n, 3)
+        kb = Array{Float64}(undef, n-2, 3)
         len = sum([norm(edges[i,:]) for i in 1:n-1])
 
         #adding J (counterclockwise pi/2 rotation matrix)
@@ -115,11 +116,13 @@ end # function
     vDom(cRod)
 updates the voronoi domains' lengths of a closed Rod.
 See voronoi(oRod) for equivalent function
+
+edge quanitity
 """
 function vDom(rod::cRod)
-    rod.voronoi[1] = norm(rod.edges[1,:]) + norm(rod.edges[end,:])
+    rod.voronoi[1] = norm(rod.edges[1,:]) + norm(rod.edges[end,:]) / 2
     for i in 2:rod.n
-        rod.voronoi[i] = norm(rod.edges[i,:]) + norm(rod.edges[i-1,:])
+        rod.voronoi[i] = (norm(rod.edges[i,:]) + norm(rod.edges[i-1,:])) / 2
     end
 end # function
 
@@ -127,13 +130,16 @@ end # function
     vDom(oRod)
 updates the voronoi domains' lengths of an open Rod.
 See voronoi(cRod) for equivalent function
+
+vertex quantity
 """
 function vDom(rod::oRod)
-    for i in 1:(rod.n-1)
-        rod.voronoi[i] = norm(rod.edges[i+1,:]) + norm(rod.edges[i,:])
+    rod.voronoi[1] = norm(rod.edges[1,:]) / 2
+    rod.voronoi[rod.n] = norm(rod.edges[rod.n - 1,:]) / 2
+    for i in 2:(rod.n - 1)
+        rod.voronoi[i] = (norm(rod.edges[i-1,:]) + norm(rod.edges[i,:])) / 2
     end
 end # function
-
 
 
 """
@@ -141,6 +147,8 @@ end # function
 
 returns array of midpoints of each edge  of the rod.
 Output shape differs for closed or open rod
+
+edge quanitity
 """
 function midpoints(rod::cRod)
     rod.midp .= (rod.X .+ rod.X[[2:end; 1],:]) ./ 2.
@@ -153,6 +161,8 @@ end # function
 """
     kb(cRod)
 Computes the discrete curvature binormal (kappa b) from Bergou et al.
+
+interior quantity
 """
 function kb(rod::cRod)
     rod.kb[1,:] = (2. * cross(rod.frame[end, 1, :], rod.frame[1,1,:])
@@ -175,8 +185,9 @@ end # function
 
 """
     matcurve(rod::cRod)
-
 Computes the material curvatures of the rod
+
+interior quanitity
 """
 function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
     omega = Array{Float64}(undef, rod.n, 2, 2)
@@ -203,6 +214,7 @@ end # function
     skewmat(a::Array{Float64})
 
 Returns the skew-symmetric matrix such as for a and b 3-vectors, cross(a,b) = skewmat(a) * b
+
 """
 function skewmat(a::Float64)
     return [[0, -a[3], a[2]],[a[3], 0, -a[1]],[-a[2], a[1], 0]]
@@ -228,6 +240,8 @@ end # function
     bForce(rod::cRod)
 
 Computes the bending energy of the rod, for an naturally isotropic straight rod
+
+vertex quanitity
 """
 function bForce(rod::cRod)
     kb = rod.kb
@@ -275,6 +289,7 @@ end # function
     bForce(rod::oRod)
 Computes the forces due to bending and twist elasticity
 
+ vertex quanitity
 """
 function bForce(rod::oRod)
 
@@ -286,6 +301,8 @@ end # function
     dist(aRod)
 
 returns matrix of distances between points of the rod
+
+edge quanitity
 """
 function dist(rod::aRod)
     Xm = rod.midp
