@@ -72,9 +72,6 @@ struct oRod <: aRod # structure for open rod
             vor[i] = (norm(edges[i,:]) + norm(edges[i-1,:])) / 2
         end
         normal = edges[[2:end],:] - edges[[1:end-1],:]
-        J = [0 -1;1 0]
-
-        normal = append!(J * edge[1,:],normal) #setting normal of first vertex
         for i in 1:n-1
             normalize!(normal[i,:])
         end
