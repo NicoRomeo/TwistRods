@@ -67,12 +67,10 @@ struct oRod <: aRod # structure for open rod
 
         vor = Array{Float64}(undef,n)
 
-        """is this (below) right? The vor calcs for cRod don't
-        make sense either
-        """
+
 
         for i in 1:n
-            vor[i] = norm(X[i,:]) + norm(X[i-1,:])
+            vor[i] = norm(edges[i,:]) + norm(edges[i-1,:])
         end
 
         normal = edges[[2:end],:] - edges[[1:end-1],:]
