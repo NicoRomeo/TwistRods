@@ -55,9 +55,9 @@ struct oRod <: aRod # structure for open rod
     edges::Array{Float64,2}
     voronoi::Array{Float64,1}
     kb::Array{Float64,1}  # Discrete curvature binormal scalar function.
-    chi::Array{Float64,1}
+    chi::Array{Float64}
     ttilda::Array{Float64,2}
-    dtilda::Array{Float64,2}
+    dtilda::Array{Float64,3}
     theta::Array{Float64,1}
     frame::Array{Float64,3}
     J::Matrix{Int8,2}
@@ -85,12 +85,20 @@ struct oRod <: aRod # structure for open rod
             norm_edges[i,:] = normalize(edges[i,:])
         end
         frame = cat(norm_edges, normal, binormal, dims=3)
+        chi = Array{Float64}(undef, n-2)
+        for i in 1:n-2
+            chi[i] = 1 .+ dot(edges[i,:], edges[i+1,:])
+        end
+        ttilda = (frame[1:end-1,1,:] + frame[2:end,1,:]) ./ chi
+        dtilda = Array{Float64}(undef, n-2, 3,2)
+        dtilda[:,:,1] = (frame[1:end-1,2,:] + frame[2:end,2,:]) ./ chi
+        dtilda[:,:,1] = (frame[1:end-1,3,:] + frame[2:end,3,:]) ./ chi
         kb = Array{Float64}(undef, n-2, 3)
         len = sum([norm(edges[i,:]) for i in 1:n-1])
 
         #adding J (counterclockwise pi/2 rotation matrix)
         J = [0 -1;1 0]
-        new(n, X, nTwist, len, midp, edges, vor, kb, zeros(Float64, n), frame, J)
+        new(n, X, nTwist, len, midp, edges, vor, kb, chi, ttilda, dtilda, zeros(Float64, n), frame, J)
     end # function
 end # struct
 
@@ -221,20 +229,20 @@ Interior quantity
 function chi(rod::oRod)
     res = Array{Float64}(undef, rod.n-2)
     for i in 1:rod.n-2
-        chi[i] = 1 + dot(rod.edges[i,:], rod.edges[i+1,:])
+        res[i] = 1 + dot(rod.edges[i,:], rod.edges[i+1,:])
     end
-    return chi
+    return res
 end # function
 
 
 """
     ttilda(rod::oRod)
 
-Computes the abreviation t tilda.
+Updates the quantity t tilda
 Interior Quantity
 """
-function ttilda(rod::oRod)
-    return (rod.frame[1:end-1,1,:]+rod.frame[2:end,1,:]) ./ chi  #To test!
+function update_tilda(rod::oRod)
+    rod.ttilda = (rod.frame[1:end-1,1,:]+rod.frame[2:end,1,:]) ./ chi  #To test!
 end # function
 
 
@@ -245,8 +253,8 @@ Computes the abreviation d tilda. Array of d_1 tilda and d_2 tilda, each being a
 Interior Quantity
 """
 function dtilda(rod::oRod)
-    return [(rod.frame[1:end-1,2,:]+rod.frame[2:end,2,:]) ./ chi,
-    (rod.frame[1:end-1,3,:]+rod.frame[2:end,3,:]) ./ chi]
+    dtilda[:,:,1] = (rod.frame[1:end-1,2,:] + rod.frame[2:end,2,:]) ./ chi
+    dtilda[:,:,2] = (rod.frame[1:end-1,3,:] + rod.frame[2:end,3,:]) ./ chi
 end # function
 
 
@@ -347,9 +355,13 @@ Returns the gradients of material curvatures ∂κ_i/∂e^j
 """
 function matcurvegrad(rod::oRod, i::Int64, j::Int64)
     if i == j
-        return rod.kb[i,:]/(2*norm(rod.edges[i, :]))
+        return cat((-rod.matcurv[i,1]*rod.ttilda[i,:] - cross(rod.frame[i-1,1,:], rod.dtilda[i,:,2]))/norm(rod.edges[i-1, :]),
+                (rod.matcurv[i,2]*rod.ttilda[i,:]+cross(rod.frame[i-1,1,:], rod.dtilda[i,:,1]))/norm(rod.edges[i-1, :])
+                ,dims=2)
     elseif (j == i - 1 && j >= 1)
-        return rod.kb[i,:]/(2*norm(rod.edges[i-1, :]))
+        return cat((-rod.matcurv[i,1]*rod.ttilda[i,:]+cross(rod.frame[i,1,:], rod.dtilda[i,:,2]))/norm(rod.edges[i-1, :]),
+                (rod.matcurv[i,2]*rod.ttilda[i,:]-cross(rod.frame[i,1,:], rod.dtilda[i,:,1]))/norm(rod.edges[i-1, :])
+                ,dims=2)
     else
         return [0.,0.,0.]
 end # function
