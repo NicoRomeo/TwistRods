@@ -55,6 +55,9 @@ struct oRod <: aRod # structure for open rod
     edges::Array{Float64,2}
     voronoi::Array{Float64,1}
     kb::Array{Float64,1}  # Discrete curvature binormal scalar function.
+    chi::Array{Float64,1}
+    ttilda::Array{Float64,2}
+    dtilda::Array{Float64,2}
     theta::Array{Float64,1}
     frame::Array{Float64,3}
     J::Matrix{Int8,2}
@@ -176,7 +179,7 @@ function kb(rod::cRod)
 end # function
 
 function kb(rod::oRod)
-    for i in 2:rod.n
+    for i in 2:(rod.n-1)
         rod.kb[i-1,:] = (2. * cross(rod.edges[i-1, :], rod.edges[i,:])
                 /(norm(rod.edges[i-1,:])*norm(rod.edges[i,:])
                 + dot(rod.edges[i-1, :], rod.edges[i,:])))
@@ -209,6 +212,43 @@ function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
     return omega
 end # function
 
+"""
+    chi(rod::oRod)
+
+Computes the intermediate scalar quantity chi from "Discrete Viscous Thread", Bergou et al 2010 (appendix A)
+Interior quantity
+"""
+function chi(rod::oRod)
+    res = Array{Float64}(undef, rod.n-2)
+    for i in 1:rod.n-2
+        chi[i] = 1 + dot(rod.edges[i,:], rod.edges[i+1,:])
+    end
+    return chi
+end # function
+
+
+"""
+    ttilda(rod::oRod)
+
+Computes the abreviation t tilda.
+Interior Quantity
+"""
+function ttilda(rod::oRod)
+    return (rod.frame[1:end-1,1,:]+rod.frame[2:end,1,:]) ./ chi  #To test!
+end # function
+
+
+"""
+    dtilda(rod::oRod)
+
+Computes the abreviation d tilda. Array of d_1 tilda and d_2 tilda, each being an
+Interior Quantity
+"""
+function dtilda(rod::oRod)
+    return [(rod.frame[1:end-1,2,:]+rod.frame[2:end,2,:]) ./ chi,
+    (rod.frame[1:end-1,3,:]+rod.frame[2:end,3,:]) ./ chi]
+end # function
+
 
 """
     skewmat(a::Array{Float64})
@@ -216,8 +256,8 @@ end # function
 Returns the skew-symmetric matrix such as for a and b 3-vectors, cross(a,b) = skewmat(a) * b
 
 """
-function skewmat(a::Float64)
-    return [[0, -a[3], a[2]],[a[3], 0, -a[1]],[-a[2], a[1], 0]]
+function skewmat(a::Array{Float64})
+    return [0 -a[3] a[2];a[3] 0 -a[1];-a[2] a[1] 0]
 end # function
 
 """
@@ -282,6 +322,36 @@ function bEnergy(rod::oRod)
         end
     end
     return E
+end # function
+
+
+
+"""
+    twistgrad(rod::oRod)
+
+returns the twist gradient ∂m_i/∂e^j
+"""
+function twistgrad(rod::oRod, i::Int64, j::Int64)
+    if i == j
+        return rod.kb[i,:]/(2*norm(rod.edges[i, :]))
+    elseif (j == i - 1 && j >= 1)
+        return rod.kb[i,:]/(2*norm(rod.edges[i-1, :]))
+    else
+        return [0.,0.,0.]
+end # function
+
+"""
+    matcurvegrad(rod::oRod, i::Int64, j::Int64)
+
+Returns the gradients of material curvatures ∂κ_i/∂e^j
+"""
+function matcurvegrad(rod::oRod, i::Int64, j::Int64)
+    if i == j
+        return rod.kb[i,:]/(2*norm(rod.edges[i, :]))
+    elseif (j == i - 1 && j >= 1)
+        return rod.kb[i,:]/(2*norm(rod.edges[i-1, :]))
+    else
+        return [0.,0.,0.]
 end # function
 
 
