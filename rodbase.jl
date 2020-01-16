@@ -80,22 +80,24 @@ struct oRod <: aRod # structure for open rod
     J::Array{Int64,2}
     function oRod(X::Array{Float64,2}, B::Array{Float64,2}, nTwist::Float64)
         n = size(X)[1]
-        midp = (X[[1:end-1], :] + X[[2:end], :]) / 2.0
-        edges = X[[2:end], :] - X[[1:end-1], :] # only n - 1 edges
+        midp = (X[1:end-1, :] + X[2:end, :]) / 2.0
+        edges = X[2:end, :] - X[1:end-1, :] # only n - 1 edges
         vor = Array{Float64}(undef, n)
         vor[1] = norm(edges[1, :]) / 2
-        vor[n] = nor(edges[n, :]) / 2
+        vor[n] = norm(edges[n-1, :]) / 2
         for i = 2:n-1
             vor[i] = (norm(edges[i, :]) + norm(edges[i-1, :])) / 2
         end
-        normal = edges[[2:end], :] - edges[[1:end-1], :]
-        for i = 1:n-1
-            normalize!(normal[i, :])
+        normal = edges[2:end, :] - edges[1:end-1, :]
+        for i = 2:n-1
+            normalize!(normal[i-1, :])
         end
+        normal = cat(transpose(normal[1, :]), normal, dims = 1)
         binormal = Array{Float64}(undef, n - 1, 3)
-        for i = 1:n-1
-            binormal[i, :] = normalize!(cross(edges[i, :], normal[i, :]))
+        for i = 1:n-2
+            binormal[i, :] = normalize!(cross(edges[i,:], normal[i,:]))
         end
+        binormal[1, :] = binormal[2, :]
         norm_edges = Array{Float64}(undef, n - 1, 3)
         for i = 1:n-1
             norm_edges[i, :] = normalize(edges[i, :])
@@ -206,6 +208,18 @@ function midpoints(rod::oRod)
 end # function
 
 """
+    chi(rod::oRod)
+
+Computes the intermediate scalar quantity chi from "Discrete Viscous Thread", Bergou et al 2010 (appendix A)
+Interior quantity
+"""
+function chi(rod::oRod)
+    for i = 1:rod.n-2
+        rod.chi[i] = 1 + dot(rod.edges[i, :], rod.edges[i+1, :])
+    end
+end # function
+
+"""
     kb(cRod)
 Computes the discrete curvature binormal (kappa b) from Bergou et al.
 
@@ -224,22 +238,9 @@ end # function
 
 function kb(rod::oRod)
     for i = 2:(rod.n-1)
-        rod.kb[i-1, :] = (2.0 * cross(rod.edges[i-1, :], rod.edges[i, :]) / rod.chi)
+        rod.kb[i-1, :] = (2.0 * cross(rod.edges[i-1, :], rod.edges[i, :]) / rod.chi[i-1])
     end
 end # function
-
-"""
-    chi(rod::oRod)
-
-Computes the intermediate scalar quantity chi from "Discrete Viscous Thread", Bergou et al 2010 (appendix A)
-Interior quantity
-"""
-function chi(rod::oRod)
-    for i = 1:rod.n-2
-        rod.chi[i] = 1 + dot(rod.edges[i, :], rod.edges[i+1, :])
-    end
-end # function
-
 
 """
     ttilda(rod::oRod)
@@ -248,7 +249,7 @@ Updates the quantity t tilda
 Interior Quantity
 """
 function update_tilda(rod::oRod)
-    rod.ttilda = (rod.frame[1:end-1, 1, :] + rod.frame[2:end, 1, :]) ./ chi  #To test!
+rod.ttilda[:,:] = (rod.frame[1:end-1, 1, :] + rod.frame[2:end, 1, :]) ./ rod.chi  #To test!
 end # function
 
 
@@ -259,8 +260,8 @@ Computes the abreviation d tilda. Array of d_1 tilda and d_2 tilda, each being a
 Interior Quantity
 """
 function dtilda(rod::oRod)
-    rod.dtilda[:, :, 1] = (rod.frame[1:end-1, 2, :] + rod.frame[2:end, 2, :]) ./ chi
-    rod.dtilda[:, :, 2] = (rod.frame[1:end-1, 3, :] + rod.frame[2:end, 3, :]) ./ chi
+    rod.dtilda[:, :, 1] .= (rod.frame[1:end-1, 2, :] + rod.frame[2:end, 2, :]) ./ rod.chi
+    rod.dtilda[:, :, 2] .= (rod.frame[1:end-1, 3, :] + rod.frame[2:end, 3, :]) ./ rod.chi
 end # function
 
 """
@@ -289,12 +290,13 @@ function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
     return omega
 end # function
 
+#ISSUES: fix dot product 
 function matcurve(rod::oRod) ## omega_i^j in Bergou 2008
     omega = Array{Float64}(undef, rod.n - 2, 2, 2) #matcurve is interior quantity
 
     for i = 2:rod.n - 1
-        omega[i-1, 1, :] = 0.5 * dot((rod.dtilda[i-1,:,2] * rod.chi), rod.kb[i-1])
-        omega[i-1, 2, :] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi), rod.kb[i-1])
+        omega[i-1, 1, :] = 0.5 * dot((rod.dtilda[i-1,:,2] * rod.chi[i-1]), rod.kb[i-1,:])
+        omega[i-1, 2, :] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi[i-1]), rod.kb[i-1,:])
 
     end
     return omega
@@ -378,7 +380,7 @@ Computes the bending energy of oRod
 """
 function bEnergy(rod::oRod)
     E = 0.0
-    omega = rod.matcurve
+    omega = matcurve(rod)
     for i = 2:rod.n - 1
         for j = 1:2
             E += dot(omega[i-1, j,:], rod.B * omega[i-1, j,:]) /
@@ -400,7 +402,7 @@ function tEnergy(rod::oRod, beta::Float64)
         twist[i-1] = rod.theta[i] - rod.theta[i-1]
     end
     for i = 2:n
-        E += (twist[i-1]**2) * beta / (2 * rod.voronoi[i])
+        E += (twist[i-1]^2) * beta / (2 * rod.voronoi[i])
     end
     return E
 end # function. note: ignored bounds, requires fixing
