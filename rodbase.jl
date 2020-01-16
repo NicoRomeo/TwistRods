@@ -55,7 +55,7 @@ struct oRod <: aRod # structure for open rod
     midp::Array{Float64,2}
     edges::Array{Float64,2}
     voronoi::Array{Float64,1}
-    kb::Array{Float64,1}  # Discrete curvature binormal scalar function.
+    kb::Array{Float64,2}  # Discrete curvature binormal scalar function.
     chi::Array{Float64}
     ttilda::Array{Float64,2}
     dtilda::Array{Float64,3}
