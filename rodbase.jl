@@ -37,7 +37,7 @@ struct cRod <: aRod  # structure for closed rod
             norm_edges[i, :] = normalize(edges[i, :])
         end
         frame = cat(norm_edges, normal, binormal, dims = 3)
-        kb = Array{Float64}(undef, n - 2, 3)
+        kb = Array{Float64}(undef, n, 3)
         len = sum([norm(edges[i, :]) for i = 1:n])
 
         #adding J (counterclockwise pi/2 rotation matrix)
