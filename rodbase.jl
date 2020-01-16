@@ -73,8 +73,9 @@ struct oRod <: aRod # structure for open rod
     dtilda::Array{Float64,3}
     theta::Array{Float64,1}
     frame::Array{Float64,3}
+    B::Array{Float64,2}
     J::Array{Int64,2}
-    function oRod(X::Array{Float64,2}, nTwist::Float64)
+    function oRod(X::Array{Float64,2}, B::Array{Float64,2}, nTwist::Float64)
         n = size(X)[1]
         midp = (X[[1:end-1], :] + X[[2:end], :]) / 2.0
         edges = X[[2:end], :] - X[[1:end-1], :] # only n - 1 edges
@@ -125,6 +126,7 @@ struct oRod <: aRod # structure for open rod
             dtilda,
             zeros(Float64, n),
             frame,
+            B,
             J,
         )
     end # function
