@@ -67,10 +67,13 @@ struct oRod <: aRod # structure for open rod
     midp::Array{Float64,2}
     edges::Array{Float64,2}
     voronoi::Array{Float64,1}
+
     kb::Array{Float64,2}  # Discrete curvature binormal scalar function.
     chi::Array{Float64}
     ttilda::Array{Float64,2}
     dtilda::Array{Float64,3}
+    matcurves::Array{Float64,2}
+
     theta::Array{Float64,1}
     frame::Array{Float64,3}
     B::Array{Float64,2}
@@ -109,6 +112,8 @@ struct oRod <: aRod # structure for open rod
         kb = Array{Float64}(undef, n - 2, 3)
         len = sum([norm(edges[i, :]) for i = 1:n-1])
 
+        matcurves = Array{Float64}(undef, n - 2, 2)
+
         #adding J (counterclockwise pi/2 rotation matrix)
 
         J = [0 -1; 1 0]
@@ -124,6 +129,7 @@ struct oRod <: aRod # structure for open rod
             chi,
             ttilda,
             dtilda,
+            matcurves
             zeros(Float64, n),
             frame,
             B,
@@ -401,7 +407,7 @@ Returns the gradients of material curvatures ∂κ_i/∂e^j
 """
 function matcurvegrad(rod::oRod, i::Int64, j::Int64)
     if i == j
-        return cat(
+        return transpose(cat(
             (-rod.matcurv[i, 1] * rod.ttilda[i, :] -
              cross(rod.frame[i-1, 1, :], rod.dtilda[i, :, 2])) /
             norm(rod.edges[i-1, :]),
@@ -409,9 +415,9 @@ function matcurvegrad(rod::oRod, i::Int64, j::Int64)
              cross(rod.frame[i-1, 1, :], rod.dtilda[i, :, 1])) /
             norm(rod.edges[i-1, :]),
             dims = 2,
-        )
+        ))
     elseif (j == i - 1 && j >= 1)
-        return cat(
+        return transpose(cat(
             (-rod.matcurv[i, 1] * rod.ttilda[i, :] +
              cross(rod.frame[i, 1, :], rod.dtilda[i, :, 2])) /
             norm(rod.edges[i-1, :]),
@@ -419,7 +425,7 @@ function matcurvegrad(rod::oRod, i::Int64, j::Int64)
              cross(rod.frame[i, 1, :], rod.dtilda[i, :, 1])) /
             norm(rod.edges[i-1, :]),
             dims = 2,
-        )
+        ))
     else
         return [0.0, 0.0, 0.0]
     end #if
@@ -430,10 +436,24 @@ end # function
     bForce(rod::oRod)
 Computes the forces due to bending and twist elasticity
 
- vertex quanitity
+ vertex quantity
 """
 function bForce(rod::oRod)
-
+    force = Array{Float64}(undef, rod.n, 3)
+    force[1, :] = -dot(rod.matcurves[1,:], rod.B * matcurvegrad(2, 1)) / rod.voronoi[2]
+    force[2, :] = (dot(rod.matcurves[1,:], rod.B * (matcurvegrad(rod, 2, 1) - matcurvegrad(2, 2))) / rod.voronoi[2]
+                    -dot(rod.matcurves[2,:], rod.B * matcurvegrad(3, 2)) / rod.voronoi[3]
+    )
+    for i in 3:(rod.n-2)
+        force[i, :] = (dot(rod.matcurves[i-1,:], rod.B * (matcurvegrad(rod, i, i-1) - matcurvegrad(i, i))) / rod.voronoi[i]
+                        +dot(rod.matcurves[i-2,:], rod.B * matcurvegrad(rod, i-1, i-1)) / rod.voronoi[i-1]
+                        -dot(rod.matcurves[i,:], rod.B * matcurvegrad(i+1, i)) / rod.voronoi[i+1]
+        )
+    end #for
+    force[end-1, :] = (dot(rod.matcurves[rod.n-2,:], rod.B * (matcurvegrad(rod, rod.n-1, rod.n-2) - matcurvegrad(rod.n-1, rod.n-1))) / rod.voronoi[rod.n-1]
+                    +dot(rod.matcurves[rod.n-3,:], rod.B * matcurvegrad(rod, rod.n-2, rod.n-2)) / rod.voronoi[rod.n-2]
+    )
+    force[end, :] = dot(rod.matcurves[end,:], rod.B * matcurvegrad(rod, rod.n-1, rod.n-1)) / rod.voronoi[rod.n-1]
 end # function
 
 
