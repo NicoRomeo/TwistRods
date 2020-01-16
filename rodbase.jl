@@ -61,7 +61,7 @@ struct oRod <: aRod # structure for open rod
     dtilda::Array{Float64,3}
     theta::Array{Float64,1}
     frame::Array{Float64,3}
-    J::Matrix{Int8,2}
+    J::Array{Int64,2}
     function oRod(X::Array{Float64,2}, nTwist::Float64)
         n = size(X)[1]
         midp = (X[[1:end-1],:] + X[[2:end],:]) / 2.
@@ -301,15 +301,15 @@ function bForce(rod::cRod)
     end
     Fb = Array{Float64}(undef, rod.n, 3)
     for i in 2:rod.n-1 ### TODO: handle edge cases i=2, i=n-1
-        ui = -((-2.* cross(edges[i,:], kb[i,:]) + (edges[i,:]*transpose(kb[i,:]) * kb[i,:]) +
-            (-2.* cross(edges[i-1,:], kb[i,:]) + (edges[i-1,:]*transpose(kb[i,:]) * kb[i,:])))/
+        ui = -((-2. * cross(edges[i,:], kb[i,:]) + (edges[i,:]*transpose(kb[i,:]) * kb[i,:]) +
+            (-2. * cross(edges[i-1,:], kb[i,:]) + (edges[i-1,:]*transpose(kb[i,:]) * kb[i,:])))/
             (norm_edges[i-1]*norm_edges[i] + dot(edges[i,:], edges[i-1,:])))/rod.voronoi[i]
 
-        v = (-2.* cross(edges[i-2,:], kb[i-1,:]) + (edges[i-2,:]*transpose(kb[i-1,:]) * kb[i-1,:]))/(norm_edges[i-2]*norm_edges[i-1] + dot(edges[i-1,:], edges[i-2,:]))/rod.voronoi[i-1]
+        v = (-2. * cross(edges[i-2,:], kb[i-1,:]) + (edges[i-2,:]*transpose(kb[i-1,:]) * kb[i-1,:]))/(norm_edges[i-2]*norm_edges[i-1] + dot(edges[i-1,:], edges[i-2,:]))/rod.voronoi[i-1]
 
-        w = (-2.* cross(edges[i+1,:], kb[i+1,:]) + (edges[i+1,:]*transpose(kb[i+1,:]) * kb[i+1,:]))/(norm_edges[i]*norm_edges[i+1] + dot(edges[i,:], edges[i+1,:]))/rod.voronoi[i+1]
+        w = (-2. * cross(edges[i+1,:], kb[i+1,:]) + (edges[i+1,:]*transpose(kb[i+1,:]) * kb[i+1,:]))/(norm_edges[i]*norm_edges[i+1] + dot(edges[i,:], edges[i+1,:]))/rod.voronoi[i+1]
 
-        clamp_contrib = .5 * (rod.nTwist/rod.len) * (-kb[i-1,:]/norm_edges[i] + kb[i+1,:]/norm_edges[i] + (-1./norm_edges[i-1] + 1./norm_edges[i+1]) * kb[i,:])
+        clamp_contrib = .5 * (rod.nTwist/rod.len) * (-kb[i-1,:]/norm_edges[i] + kb[i+1,:]/norm_edges[i] + (-1. / norm_edges[i-1] + 1. / norm_edges[i+1]) * kb[i,:])
 
         # Fb[i,:] = (combination of ui, v, w, clamp_contrib...)
 
@@ -327,7 +327,7 @@ function bEnergy(rod::oRod)
     omega = rod.matcurve
     for i in 1:rod.n
         for j in 1:2
-            E += dot(omega[i,j,:], rod.B*omega[i,j,:])) / (2. * rod.voronoi[i])
+            E += dot(omega[i,j,:], rod.B*omega[i,j,:]) / (2. * rod.voronoi[i])
         end
     end
     return E
@@ -347,6 +347,7 @@ function twistgrad(rod::oRod, i::Int64, j::Int64)
         return rod.kb[i,:]/(2*norm(rod.edges[i-1, :]))
     else
         return [0.,0.,0.]
+    end #if
 end # function
 
 """
@@ -365,6 +366,7 @@ function matcurvegrad(rod::oRod, i::Int64, j::Int64)
                 ,dims=2)
     else
         return [0.,0.,0.]
+    end #if
 end # function
 
 
