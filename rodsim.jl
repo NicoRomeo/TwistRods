@@ -12,7 +12,7 @@ using Random
 include("rodbase.jl")
 
 
-function runstep(rod::aRod, parama::Array{T, 1}) where {T<:Number}
+function runstep(rod::aRod, parama::Array{T,1}) where {T<:Number}
     # update Geometry and associated quantitites: midpoints, voronoi domains, ..
     #update_edges(rod)
     midpoints(rod)
@@ -23,7 +23,7 @@ function runstep(rod::aRod, parama::Array{T, 1}) where {T<:Number}
     E = bEnergy(rod, parama[1])
     print(E)
     # compute new frame, compute twisting force
-    tForce = 0.
+    tForce = 0.0
 
     # Extension
 
@@ -47,30 +47,30 @@ end
 function main()
     print("\n___Rod1___\n")
     X = rand(5, 3)
-    nTwist = 0.
+    nTwist = 0.0
     rod1 = cRod(X, nTwist)
-    runstep(rod1, [1., 2., 4., 5])
+    runstep(rod1, [1.0, 2.0, 4.0, 5])
 
     print("\n___Rod2___\n")
     X = zeros(Float64, 3, 3)
-    for i in 1:3
-        X[i,1] = cos(2. *pi*i/3.)
-        X[i,2] = sin(2. *pi*i/3.)
+    for i = 1:3
+        X[i, 1] = cos(2.0 * pi * i / 3.0)
+        X[i, 2] = sin(2.0 * pi * i / 3.0)
     end
-    nTwist = 0.
+    nTwist = 0.0
     rod2 = cRod(X, nTwist)
     print(rod2.kb)
-    runstep(rod2, [1., 2., 4., 5])
+    runstep(rod2, [1.0, 2.0, 4.0, 5])
     print(rod2.kb)
     print("\n___Rod3___\n")
     X = zeros(Float64, 10, 3)
-    for i in 1:10
-        X[i,1] = 8. *cos(2. *pi*i/10.)
-        X[i,2] = 8. *sin(2. *pi*i/10.)
+    for i = 1:10
+        X[i, 1] = 8.0 * cos(2.0 * pi * i / 10.0)
+        X[i, 2] = 8.0 * sin(2.0 * pi * i / 10.0)
     end
-    nTwist = 0.
+    nTwist = 0.0
     rod3 = cRod(X, nTwist)
-    runstep(rod3, [1., 2., 4., 5])
+    runstep(rod3, [1.0, 2.0, 4.0, 5])
 
     print("\n___end test___\n")
 
