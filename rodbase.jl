@@ -187,7 +187,7 @@ end # function
 returns array of midpoints of each edge  of the rod.
 Output shape differs for closed or open rod
 
-edge quanitity
+edge quantity
 """
 function midpoints(rod::cRod)
     rod.midp .= (rod.X .+ rod.X[[2:end; 1], :]) ./ 2.0

@@ -21,7 +21,7 @@ function runstep(rod::aRod, parama::Array{T,1}) where {T<:Number}
 
     # bending force
     E = bEnergy(rod, parama[1])
-    print(E)
+    println(E)
     # compute new frame, compute twisting force
     tForce = 0.0
 
@@ -59,9 +59,9 @@ function main()
     end
     nTwist = 0.0
     rod2 = cRod(X, nTwist)
-    print(rod2.kb)
+    println(rod2.kb)
     runstep(rod2, [1.0, 2.0, 4.0, 5])
-    print(rod2.kb)
+    println(rod2.kb)
     print("\n___Rod3___\n")
     X = zeros(Float64, 10, 3)
     for i = 1:10
