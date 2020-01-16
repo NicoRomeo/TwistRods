@@ -105,7 +105,7 @@ struct oRod <: aRod # structure for open rod
         ttilda = (frame[1:end-1, 1, :] + frame[2:end, 1, :]) ./ chi
         dtilda = Array{Float64}(undef, n - 2, 3, 2)
         dtilda[:, :, 1] = (frame[1:end-1, 2, :] + frame[2:end, 2, :]) ./ chi
-        dtilda[:, :, 1] = (frame[1:end-1, 3, :] + frame[2:end, 3, :]) ./ chi
+        dtilda[:, :, 2] = (frame[1:end-1, 3, :] + frame[2:end, 3, :]) ./ chi
         kb = Array{Float64}(undef, n - 2, 3)
         len = sum([norm(edges[i, :]) for i = 1:n-1])
 
@@ -218,36 +218,8 @@ end # function
 
 function kb(rod::oRod)
     for i = 2:(rod.n-1)
-        rod.kb[i-1, :] = (2.0 * cross(rod.edges[i-1, :], rod.edges[i, :]) /
-                          (norm(rod.edges[i-1, :]) * norm(rod.edges[i, :]) +
-                           dot(rod.edges[i-1, :], rod.edges[i, :])))
+        rod.kb[i-1, :] = (2.0 * cross(rod.edges[i-1, :], rod.edges[i, :]) / rod.chi)
     end
-end # function
-
-"""
-    matcurve(rod::cRod)
-Computes the material curvatures of the rod
-
-interior quanitity
-"""
-function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
-    omega = Array{Float64}(undef, rod.n, 2, 2)
-
-    omega[1, 1, 1] = dot(rod.kb[1, :], rod.frame[end, 3, :])
-    omega[1, 1, 2] = -dot(rod.kb[1, :], rod.frame[end, 2, :])
-
-    omega[1, 2, 1] = dot(rod.kb[1, :], rod.frame[1, 3, :])
-    omega[1, 2, 2] = -dot(rod.kb[1, :], rod.frame[1, 2, :])
-
-    for i = 2:rod.n
-        omega[i, 1, 1] = dot(rod.kb[i, :], rod.frame[i-1, 3, :])
-        omega[i, 1, 2] = -dot(rod.kb[i, :], rod.frame[i-1, 2, :])
-
-        omega[i, 2, 1] = dot(rod.kb[i, :], rod.frame[i, 3, :])
-        omega[i, 2, 2] = -dot(rod.kb[i, :], rod.frame[i, 2, :])
-
-    end
-    return omega
 end # function
 
 """
@@ -287,6 +259,42 @@ function dtilda(rod::oRod)
     dtilda[:, :, 2] = (rod.frame[1:end-1, 3, :] + rod.frame[2:end, 3, :]) ./ chi
 end # function
 
+"""
+    matcurve(rod::cRod)
+Computes the material curvatures of the rod
+
+interior quanitity
+"""
+function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
+    omega = Array{Float64}(undef, rod.n, 2, 2)
+
+    omega[1, 1, 1] = dot(rod.kb[1, :], rod.frame[end, 3, :])
+    omega[1, 1, 2] = -dot(rod.kb[1, :], rod.frame[end, 2, :])
+
+    omega[1, 2, 1] = dot(rod.kb[1, :], rod.frame[1, 3, :])
+    omega[1, 2, 2] = -dot(rod.kb[1, :], rod.frame[1, 2, :])
+
+    for i = 2:rod.n
+        omega[i, 1, 1] = dot(rod.kb[i, :], rod.frame[i-1, 3, :])
+        omega[i, 1, 2] = -dot(rod.kb[i, :], rod.frame[i-1, 2, :])
+
+        omega[i, 2, 1] = dot(rod.kb[i, :], rod.frame[i, 3, :])
+        omega[i, 2, 2] = -dot(rod.kb[i, :], rod.frame[i, 2, :])
+
+    end
+    return omega
+end # function
+
+function matcurve(rod::oRod) ## omega_i^j in Bergou 2008
+    omega = Array{Float64}(undef, rod.n - 2, 2, 2) #matcurve is interior quantity
+
+    for i = 2:rod.n - 1
+        omega[i-1, 1, :] = 0.5 * dot((rod.dtilda[i-1,:,2] * rod.chi), rod.kb[i-1])
+        omega[i-1, 2, :] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi), rod.kb[i-1])
+
+    end
+    return omega
+end # function
 
 """
     skewmat(a::Array{Float64})
@@ -360,23 +368,47 @@ function bForce(rod::cRod)
 end
 
 
+# """
+#     bEnergy(rod::oRod)
+#
+# Computes the bending energy of the rod
+# """
+# function bEnergy(rod::oRod)
+#     E = 0.0
+#     omega = rod.matcurve
+#     for i = 1:rod.n
+#         for j = 1:2
+#             E += dot(omega[i, j, :], rod.B * omega[i, j, :]) /
+#                  (2.0 * rod.voronoi[i])
+#         end
+#     end
+#     return E
+# end # function
+
 """
     bEnergy(rod::oRod)
 
-Computes the bending energy of the rod
+Computes the bending energy of oRod
 """
 function bEnergy(rod::oRod)
     E = 0.0
     omega = rod.matcurve
-    for i = 1:rod.n
+    for i = 2:rod.n - 1
         for j = 1:2
-            E += dot(omega[i, j, :], rod.B * omega[i, j, :]) /
-                 (2.0 * rod.voronoi[i])
+            E += dot(omega[i-1, j,:], rod.B * omega[i-1, j,:]) /
+                (2.0 * rod.voronoi[i-1])
         end
     end
     return E
 end # function
 
+"""
+    tEnergy(rod::oRod)
+
+Computes the twist energy of oRod
+"""
+function tEnergy(rod::oRod)
+    E = 0.0
 
 
 """
