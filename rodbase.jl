@@ -235,11 +235,9 @@ Computes the intermediate scalar quantity chi from "Discrete Viscous Thread", Be
 Interior quantity
 """
 function chi(rod::oRod)
-    res = Array{Float64}(undef, rod.n - 2)
     for i = 1:rod.n-2
-        res[i] = 1 + dot(rod.edges[i, :], rod.edges[i+1, :])
+        rod.chi[i] = 1 + dot(rod.edges[i, :], rod.edges[i+1, :])
     end
-    return res
 end # function
 
 
@@ -261,8 +259,8 @@ Computes the abreviation d tilda. Array of d_1 tilda and d_2 tilda, each being a
 Interior Quantity
 """
 function dtilda(rod::oRod)
-    dtilda[:, :, 1] = (rod.frame[1:end-1, 2, :] + rod.frame[2:end, 2, :]) ./ chi
-    dtilda[:, :, 2] = (rod.frame[1:end-1, 3, :] + rod.frame[2:end, 3, :]) ./ chi
+    rod.dtilda[:, :, 1] = (rod.frame[1:end-1, 2, :] + rod.frame[2:end, 2, :]) ./ chi
+    rod.dtilda[:, :, 2] = (rod.frame[1:end-1, 3, :] + rod.frame[2:end, 3, :]) ./ chi
 end # function
 
 """
@@ -373,24 +371,6 @@ function bForce(rod::cRod)
     end
 end
 
-
-# """
-#     bEnergy(rod::oRod)
-#
-# Computes the bending energy of the rod
-# """
-# function bEnergy(rod::oRod)
-#     E = 0.0
-#     omega = rod.matcurve
-#     for i = 1:rod.n
-#         for j = 1:2
-#             E += dot(omega[i, j, :], rod.B * omega[i, j, :]) /
-#                  (2.0 * rod.voronoi[i])
-#         end
-#     end
-#     return E
-# end # function
-
 """
     bEnergy(rod::oRod)
 
@@ -413,8 +393,34 @@ end # function
 
 Computes the twist energy of oRod
 """
-function tEnergy(rod::oRod)
+function tEnergy(rod::oRod, beta::Float64)
     E = 0.0
+    twist = Array{Float64}(undef,1) #array of twist
+    for i = 2:n
+        twist[i-1] = rod.theta[i] - rod.theta[i-1]
+    end
+    for i = 2:n
+        E += (twist[i-1]**2) * beta / (2 * rod.voronoi[i])
+    end
+    return E
+end # function. note: ignored bounds, requires fixing
+
+    # """
+    #     bEnergy(rod::oRod)
+    #
+    # Computes the bending energy of the rod
+    # """
+    # function bEnergy(rod::oRod)
+    #     E = 0.0
+    #     omega = rod.matcurve
+    #     for i = 1:rod.n
+    #         for j = 1:2
+    #             E += dot(omega[i, j, :], rod.B * omega[i, j, :]) /
+    #                  (2.0 * rod.voronoi[i])
+    #         end
+    #     end
+    #     return E
+    # end # function
 
 
 """
