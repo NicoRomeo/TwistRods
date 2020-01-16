@@ -51,6 +51,7 @@ struct oRod <: aRod # structure for open rod
     n::Int32 # number of points; For oRod  no of points = no of edges - 1
     X::Array{Float64,2}
     nTwist::Float64 # Natural twist
+    len::Float64
     midp::Array{Float64,2}
     edges::Array{Float64,2}
     voronoi::Array{Float64,1}
@@ -96,12 +97,9 @@ struct oRod <: aRod # structure for open rod
         len = sum([norm(edges[i,:]) for i in 1:n-1])
 
         #adding J (counterclockwise pi/2 rotation matrix)
-<<<<<<< HEAD
+
         J = [0 -1;1 0]
         new(n, X, nTwist, len, midp, edges, vor, kb, chi, ttilda, dtilda, zeros(Float64, n), frame, J)
-=======
-        new(n, X, nTwist, len, midp, edges, vor, kb, zeros(Float64, n), frame, J)
->>>>>>> 6e96fbd824dfca8124f2441996368edd8c9ee244
     end # function
 end # struct
 
