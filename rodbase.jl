@@ -14,7 +14,7 @@ struct cRod <: aRod  # structure for closed rod
     kb::Array{Float64,2}  # Discrete curvature binormal scalar function.
     theta::Array{Float64,1} # array of twist angles
     frame::Array{Float64,3} # array of the reference
-    J::Matrix{Int8,2} #matrix that rotates vectors 90 degrees
+    J::Array{Int64,2} #matrix that rotates vectors 90 degrees
     function cRod(X::Array{Float64,2}, nTwist::Float64)
         n = size(X)[1]
         midp = (X + X[[2:end; 1],:]) / 2.
