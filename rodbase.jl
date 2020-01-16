@@ -129,7 +129,7 @@ struct oRod <: aRod # structure for open rod
             chi,
             ttilda,
             dtilda,
-            matcurves
+            matcurves,
             zeros(Float64, n),
             frame,
             B,
