@@ -292,15 +292,15 @@ end # function
 
 #ISSUES: fix dot product
 #ISSUE: matcurve is 2x1, vs. 2x2 matcurve in Bergou 2008
-function matcurve(rod::oRod) ## K_1 and K_2 in Bergou Discrete Viscous Threads
-    omega = Array{Float64}(undef, rod.n - 2, 2) #matcurve is interior quantity
+function matcurve(rod::oRod) ## kappa_1 and kappa_2 in Bergou Discrete Viscous Threads
+    kappa = Array{Float64}(undef, rod.n - 2, 2) #matcurve is interior quantity
 
     for i = 2:rod.n - 1
-        omega[i-1, 1] = 0.5 * dot((rod.dtilda[i-1,:,2] * rod.chi[i-1]), rod.kb[i-1,:])
-        omega[i-1, 2] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi[i-1]), rod.kb[i-1,:])
+        kappa[i-1, 1] = 0.5 * dot((rod.dtilda[i-1,:,2] * rod.chi[i-1]), rod.kb[i-1,:])
+        kappa[i-1, 2] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi[i-1]), rod.kb[i-1,:])
 
     end
-    return omega
+    return kappa
 end # function
 
 """
@@ -381,9 +381,9 @@ Computes the bending energy of oRod
 """
 function bEnergy(rod::oRod)
     E = 0.0
-    omega = matcurve(rod)
+    kappa = matcurve(rod)
     for i = 2:rod.n - 1
-        E += dot(transpose(omega[i-1,:]), rod.B * omega[i-1, :]) /
+        E += dot(transpose(kappa[i-1,:]), rod.B * kappa[i-1, :]) /
              (2.0 * rod.voronoi[i-1])
     end
     return E
