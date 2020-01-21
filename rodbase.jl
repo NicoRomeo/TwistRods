@@ -290,13 +290,14 @@ function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
     return omega
 end # function
 
-#ISSUES: fix dot product 
-function matcurve(rod::oRod) ## omega_i^j in Bergou 2008
-    omega = Array{Float64}(undef, rod.n - 2, 2, 2) #matcurve is interior quantity
+#ISSUES: fix dot product
+#ISSUE: matcurve is 2x1, vs. 2x2 matcurve in Bergou 2008
+function matcurve(rod::oRod) ## K_1 and K_2 in Bergou Discrete Viscous Threads
+    omega = Array{Float64}(undef, rod.n - 2, 2) #matcurve is interior quantity
 
     for i = 2:rod.n - 1
-        omega[i-1, 1, :] = 0.5 * dot((rod.dtilda[i-1,:,2] * rod.chi[i-1]), rod.kb[i-1,:])
-        omega[i-1, 2, :] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi[i-1]), rod.kb[i-1,:])
+        omega[i-1, 1] = 0.5 * dot((rod.dtilda[i-1,:,2] * rod.chi[i-1]), rod.kb[i-1,:])
+        omega[i-1, 2] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi[i-1]), rod.kb[i-1,:])
 
     end
     return omega
@@ -382,10 +383,8 @@ function bEnergy(rod::oRod)
     E = 0.0
     omega = matcurve(rod)
     for i = 2:rod.n - 1
-        for j = 1:2
-            E += dot(omega[i-1, j,:], rod.B * omega[i-1, j,:]) /
-                (2.0 * rod.voronoi[i-1])
-        end
+        E += dot(transpose(omega[i-1,:]), rod.B * omega[i-1, :]) /
+             (2.0 * rod.voronoi[i-1])
     end
     return E
 end # function
@@ -512,10 +511,6 @@ function dist(rod::aRod)
     R = -2 * (Xm * Xm') + (L2 + L2')
     return R .^ 0.5  #distance between i'th and j'th links
 end # function
-
-
-
-
 
 function iMatrix(rod::cRod)
 
