@@ -94,10 +94,9 @@ struct oRod <: aRod # structure for open rod
         end
         normal = cat(transpose(normal[1, :]), normal, dims = 1)
         binormal = Array{Float64}(undef, n - 1, 3)
-        for i = 1:n-2
+        for i = 1:n-1
             binormal[i, :] = normalize!(cross(edges[i,:], normal[i,:]))
         end
-        binormal[1, :] = binormal[2, :]
         norm_edges = Array{Float64}(undef, n - 1, 3)
         for i = 1:n-1
             norm_edges[i, :] = normalize(edges[i, :])
@@ -105,12 +104,12 @@ struct oRod <: aRod # structure for open rod
         frame = cat(norm_edges, normal, binormal, dims = 3)
         chi = Array{Float64}(undef, n - 2)
         for i = 1:n-2
-            chi[i] = 1 .+ dot(edges[i, :], edges[i+1, :])
+            chi[i] = 1 .+ dot(frame[i, :, 1], frame[i+1, :, 1])
         end
         ttilda = (frame[1:end-1, 1, :] + frame[2:end, 1, :]) ./ chi
         dtilda = Array{Float64}(undef, n - 2, 3, 2)
-        dtilda[:, :, 1] = (frame[1:end-1, 2, :] + frame[2:end, 2, :]) ./ chi
-        dtilda[:, :, 2] = (frame[1:end-1, 3, :] + frame[2:end, 3, :]) ./ chi
+        dtilda[:, :, 1] = (frame[1:end-1, :, 2] + frame[2:end, :, 2]) ./ chi
+        dtilda[:, :, 2] = (frame[1:end-1, :, 3] + frame[2:end, :, 3]) ./ chi
         kb = Array{Float64}(undef, n - 2, 3)
         len = sum([norm(edges[i, :]) for i = 1:n-1])
 
@@ -215,7 +214,7 @@ Interior quantity
 """
 function chi(rod::oRod)
     for i = 1:rod.n-2
-        rod.chi[i] = 1 + dot(rod.edges[i, :], rod.edges[i+1, :])
+        rod.chi[i] = 1 + dot(rod.frame[i, :, 1], rod.frame[i+1, :, 1])
     end
 end # function
 
@@ -226,19 +225,19 @@ Computes the discrete curvature binormal (kappa b) from Bergou et al.
 interior quantity
 """
 function kb(rod::cRod)
-    rod.kb[1, :] = (2.0 * cross(rod.frame[end, 1, :], rod.frame[1, 1, :]) /
-                    (norm(rod.frame[end, 1, :]) * norm(rod.frame[1, 1, :]) +
-                     dot(rod.frame[end, 1, :], rod.frame[1, 1, :])))
+    rod.kb[1, :] = (2.0 * cross(rod.frame[end, :, 1], rod.frame[1, :, 1]) /
+                    (norm(rod.frame[end, :, 1]) * norm(rod.frame[1, :, 1]) +
+                     dot(rod.frame[end, :, 1], rod.frame[1, :, 1])))
     for i = 2:rod.n
-        rod.kb[i, :] = (2.0 * cross(rod.frame[i-1, 1, :], rod.frame[i, 1, :]) /
-                        (norm(rod.frame[i-1, 1, :]) * norm(rod.frame[i, 1, :]) +
-                         dot(rod.frame[i-1, 1, :], rod.frame[i, 1, :])))
+        rod.kb[i, :] = (2.0 * cross(rod.frame[i-1, :, 1], rod.frame[i, :, 1]) /
+                        (norm(rod.frame[i-1, :, 1]) * norm(rod.frame[i, :, 1]) +
+                         dot(rod.frame[i-1, :, 1], rod.frame[i, :, 1])))
     end
 end # function
 
 function kb(rod::oRod)
-    for i = 2:(rod.n-1)
-        rod.kb[i-1, :] = (2.0 * cross(rod.edges[i-1, :], rod.edges[i, :]) / rod.chi[i-1])
+    for i = 1:(rod.n-2)
+        rod.kb[i, :] = (2.0 * cross(rod.frame[i, :, 1], rod.frame[i + 1, :, 1]) / rod.chi[i])
     end
 end # function
 
@@ -248,8 +247,8 @@ end # function
 Updates the quantity t tilda
 Interior Quantity
 """
-function update_tilda(rod::oRod)
-rod.ttilda[:,:] = (rod.frame[1:end-1, 1, :] + rod.frame[2:end, 1, :]) ./ rod.chi  #To test!
+function ttilda(rod::oRod)
+    rod.ttilda[:,:] = (rod.frame[1:end-1, :, 1] + rod.frame[2:end, :, 1]) ./ rod.chi  #To test!
 end # function
 
 
@@ -260,8 +259,8 @@ Computes the abreviation d tilda. Array of d_1 tilda and d_2 tilda, each being a
 Interior Quantity
 """
 function dtilda(rod::oRod)
-    rod.dtilda[:, :, 1] .= (rod.frame[1:end-1, 2, :] + rod.frame[2:end, 2, :]) ./ rod.chi
-    rod.dtilda[:, :, 2] .= (rod.frame[1:end-1, 3, :] + rod.frame[2:end, 3, :]) ./ rod.chi
+    rod.dtilda[:, :, 1] .= (rod.frame[1:end-1, :, 2] + rod.frame[2:end, :, 2]) ./ rod.chi
+    rod.dtilda[:, :, 2] .= (rod.frame[1:end-1, :, 3] + rod.frame[2:end, :, 3]) ./ rod.chi
 end # function
 
 """
@@ -273,18 +272,18 @@ interior quanitity
 function matcurve(rod::cRod)  ## omega_i^j in Bergou 2008
     omega = Array{Float64}(undef, rod.n, 2, 2)
 
-    omega[1, 1, 1] = dot(rod.kb[1, :], rod.frame[end, 3, :])
-    omega[1, 1, 2] = -dot(rod.kb[1, :], rod.frame[end, 2, :])
+    omega[1, 1, 1] = dot(rod.kb[1, :], rod.frame[end, :, 3])
+    omega[1, 1, 2] = -dot(rod.kb[1, :], rod.frame[end, :, 2])
 
-    omega[1, 2, 1] = dot(rod.kb[1, :], rod.frame[1, 3, :])
-    omega[1, 2, 2] = -dot(rod.kb[1, :], rod.frame[1, 2, :])
+    omega[1, 2, 1] = dot(rod.kb[1, :], rod.frame[1, :, 3])
+    omega[1, 2, 2] = -dot(rod.kb[1, :], rod.frame[1, :, 2])
 
     for i = 2:rod.n
-        omega[i, 1, 1] = dot(rod.kb[i, :], rod.frame[i-1, 3, :])
-        omega[i, 1, 2] = -dot(rod.kb[i, :], rod.frame[i-1, 2, :])
+        omega[i, 1, 1] = dot(rod.kb[i, :], rod.frame[i-1, :, 3])
+        omega[i, 1, 2] = -dot(rod.kb[i, :], rod.frame[i-1, :, 2])
 
-        omega[i, 2, 1] = dot(rod.kb[i, :], rod.frame[i, 3, :])
-        omega[i, 2, 2] = -dot(rod.kb[i, :], rod.frame[i, 2, :])
+        omega[i, 2, 1] = dot(rod.kb[i, :], rod.frame[i, :, 3])
+        omega[i, 2, 2] = -dot(rod.kb[i, :], rod.frame[i, :, 2])
 
     end
     return omega
@@ -296,8 +295,8 @@ function matcurve(rod::oRod) ## kappa_1 and kappa_2 in Bergou Discrete Viscous T
     kappa = Array{Float64}(undef, rod.n - 2, 2) #matcurve is interior quantity
 
     for i = 2:rod.n - 1
-        kappa[i-1, 1] = 0.5 * dot((rod.dtilda[i-1,:,2] * rod.chi[i-1]), rod.kb[i-1,:])
-        kappa[i-1, 2] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi[i-1]), rod.kb[i-1,:])
+        kappa[i-1, 1] = 0.5 * rod.chi[i-1] * dot(rod.dtilda[i-1,:,2], rod.kb[i-1,:])
+        kappa[i-1, 2] = -0.5 * rod.chi[i-1] * dot(rod.dtilda[i-1,:,1], rod.kb[i-1,:])
 
     end
     rod.matcurves[:,:] = kappa[:,:]
@@ -382,9 +381,9 @@ Computes the bending energy of oRod
 """
 function bEnergy(rod::oRod)
     E = 0.0
-    kappa = matcurve(rod)
+    kappa = rod.matcurves
     for i = 2:rod.n - 1
-        E += dot(transpose(kappa[i-1,:]), rod.B * kappa[i-1, :]) /
+        E += dot(kappa[i-1,:], rod.B * kappa[i-1, :]) /
              (2.0 * rod.voronoi[i-1])
     end
     return E
@@ -449,20 +448,20 @@ function matcurvegrad(rod::oRod, i::Int64, j::Int64)
     if i == j
         return transpose(cat(
             (-rod.matcurv[i, 1] * rod.ttilda[i, :] -
-             cross(rod.frame[i-1, 1, :], rod.dtilda[i, :, 2])) /
+             cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 2])) /
             norm(rod.edges[i-1, :]),
             (rod.matcurv[i, 2] * rod.ttilda[i, :] +
-             cross(rod.frame[i-1, 1, :], rod.dtilda[i, :, 1])) /
+             cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 1])) /
             norm(rod.edges[i-1, :]),
             dims = 2,
         ))
     elseif (j == i - 1 && j >= 1)
         return transpose(cat(
             (-rod.matcurv[i, 1] * rod.ttilda[i, :] +
-             cross(rod.frame[i, 1, :], rod.dtilda[i, :, 2])) /
+             cross(rod.frame[i, :, 1], rod.dtilda[i, :, 2])) /
             norm(rod.edges[i-1, :]),
             (rod.matcurv[i, 2] * rod.ttilda[i, :] -
-             cross(rod.frame[i, 1, :], rod.dtilda[i, :, 1])) /
+             cross(rod.frame[i, :, 1], rod.dtilda[i, :, 1])) /
             norm(rod.edges[i-1, :]),
             dims = 2,
         ))
