@@ -300,6 +300,7 @@ function matcurve(rod::oRod) ## kappa_1 and kappa_2 in Bergou Discrete Viscous T
         kappa[i-1, 2] = -0.5 * dot((rod.dtilda[i-1,:,1] * rod.chi[i-1]), rod.kb[i-1,:])
 
     end
+    rod.matcurves[:,:] = kappa[:,:]
     return kappa
 end # function
 
