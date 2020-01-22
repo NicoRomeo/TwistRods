@@ -384,7 +384,7 @@ function bEnergy(rod::oRod)
     kappa = rod.matcurves
     for i = 2:rod.n - 1
         E += dot(kappa[i-1,:], rod.B * kappa[i-1, :]) /
-             (2.0 * rod.voronoi[i-1])
+             (2.0 * rod.voronoi[i])
     end
     return E
 end # function
@@ -470,28 +470,56 @@ function matcurvegrad(rod::oRod, i::Int64, j::Int64)
     end #if
 end # function
 
+"""
+    matcurvegrad(rod::oRod,)
+
+Returns the gradients of material curvatures ∂κ_i/∂e^j as an array (n-2) x 2 x 2 x 3
+first index is i, 2nd index corresponds to 1 j= i-1 or 2 j=i, third and fourth are the gradient proper
 
 """
-    bForce(rod::oRod)
-Computes the forces due to bending and twist elasticity
+function matcurvegrad(rod::oRod)
+    res = zeros(rod.n - 2, 2, 2, 3)
+    res[1, 2, 1, :] = (-rod.matcurves[1, 1] * rod.ttilda[1, :] -
+                       cross(rod.frame[1, :, 1], rod.dtilda[2, :, 2])) /
+                      norm(rod.edges[1, :])
+    res[1, 2, 2, :] = (rod.matcurves[1, 2] * rod.ttilda[1, :] +
+                       cross(rod.frame[1, :, 1], rod.dtilda[2, :, 1])) /
+                      norm(rod.edges[1, :])
+    for i = 2:rod.n-2
+        res[i, 1, 1, :] = (-rod.matcurves[i, 1] * rod.ttilda[i, :] +
+                           cross(rod.frame[i, :, 1], rod.dtilda[i, :, 2])) /
+                          norm(rod.edges[i-1, :])
+        res[i, 1, 2, :] = (rod.matcurves[i, 2] * rod.ttilda[i, :] -
+                           cross(rod.frame[i, :, 1], rod.dtilda[i, :, 1])) /
+                          norm(rod.edges[i-1, :])
+
+        res[i, 2, 1, :] = (-rod.matcurves[i, 1] * rod.ttilda[i, :] -
+                           cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 2])) /
+                          norm(rod.edges[i-1, :])
+        res[i, 2, 2, :] = (rod.matcurves[i, 2] * rod.ttilda[i, :] +
+                           cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 1])) /
+                          norm(rod.edges[i-1, :])
+    end #for
+end #function
+
+
+"""
+    bForce(rod::oRod, matcg)
+Computes the forces due to bending and twist elasticity, where matcg is the matcurvegrad array
 
  vertex quantity
 """
-function bForce(rod::oRod)
+function bForce(rod::oRod, matcg)
     force = Array{Float64}(undef, rod.n, 3)
-    force[1, :] = -dot(rod.matcurves[1,:], rod.B * matcurvegrad(rod, 2, 1)) / rod.voronoi[2]
-    force[2, :] = (dot(rod.matcurves[1,:], rod.B * (matcurvegrad(rod, 2, 1) - matcurvegrad(rod, 2, 2))) / rod.voronoi[2]
-                    -dot(rod.matcurves[2,:], rod.B * matcurvegrad(rod, 3, 2)) / rod.voronoi[3]
-    )
-    for i in 3:(rod.n-2)
-        force[i, :] = (dot(rod.matcurves[i-1,:], rod.B * (matcurvegrad(rod, i, i-1) - matcurvegrad(rod, i, i))) / rod.voronoi[i]
+    force[1, :] = - dot(rod.matcurves[1,:], rod.B * matcg[1, 1, :, :])) / rod.voronoi[2]
+
+    for i in 2:(rod.n-1)
+        force[i, :] = (dot(rod.matcurves[i-1,:], rod.B * (matcg[i, 1, :, :] - matcg[i, 2, :, :])) / rod.voronoi[i]
                         +dot(rod.matcurves[i-2,:], rod.B * matcurvegrad(rod, i-1, i-1)) / rod.voronoi[i-1]
                         -dot(rod.matcurves[i,:], rod.B * matcurvegrad(rod, i+1, i)) / rod.voronoi[i+1]
         )
     end #for
-    force[end-1, :] = (dot(rod.matcurves[rod.n-2,:], rod.B * (matcurvegrad(rod, rod.n-1, rod.n-2) - matcurvegrad(rod.n-1, rod.n-1))) / rod.voronoi[rod.n-1]
-                    +dot(rod.matcurves[rod.n-3,:], rod.B * matcurvegrad(rod, rod.n-2, rod.n-2)) / rod.voronoi[rod.n-2]
-    )
+
     force[end, :] = dot(rod.matcurves[end,:], rod.B * matcurvegrad(rod, rod.n-1, rod.n-1)) / rod.voronoi[rod.n-1]
 end # function
 
