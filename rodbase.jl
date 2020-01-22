@@ -447,20 +447,20 @@ Returns the gradients of material curvatures ∂κ_i/∂e^j
 function matcurvegrad(rod::oRod, i::Int64, j::Int64)
     if i == j
         return transpose(cat(
-            (-rod.matcurv[i, 1] * rod.ttilda[i, :] -
+            (-rod.matcurves[i, 1] * rod.ttilda[i, :] -
              cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 2])) /
             norm(rod.edges[i-1, :]),
-            (rod.matcurv[i, 2] * rod.ttilda[i, :] +
+            (rod.matcurves[i, 2] * rod.ttilda[i, :] +
              cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 1])) /
             norm(rod.edges[i-1, :]),
             dims = 2,
         ))
     elseif (j == i - 1 && j >= 1)
         return transpose(cat(
-            (-rod.matcurv[i, 1] * rod.ttilda[i, :] +
+            (-rod.matcurves[i, 1] * rod.ttilda[i, :] +
              cross(rod.frame[i, :, 1], rod.dtilda[i, :, 2])) /
             norm(rod.edges[i-1, :]),
-            (rod.matcurv[i, 2] * rod.ttilda[i, :] -
+            (rod.matcurves[i, 2] * rod.ttilda[i, :] -
              cross(rod.frame[i, :, 1], rod.dtilda[i, :, 1])) /
             norm(rod.edges[i-1, :]),
             dims = 2,
@@ -479,14 +479,14 @@ Computes the forces due to bending and twist elasticity
 """
 function bForce(rod::oRod)
     force = Array{Float64}(undef, rod.n, 3)
-    force[1, :] = -dot(rod.matcurves[1,:], rod.B * matcurvegrad(2, 1)) / rod.voronoi[2]
-    force[2, :] = (dot(rod.matcurves[1,:], rod.B * (matcurvegrad(rod, 2, 1) - matcurvegrad(2, 2))) / rod.voronoi[2]
-                    -dot(rod.matcurves[2,:], rod.B * matcurvegrad(3, 2)) / rod.voronoi[3]
+    force[1, :] = -dot(rod.matcurves[1,:], rod.B * matcurvegrad(rod, 2, 1)) / rod.voronoi[2]
+    force[2, :] = (dot(rod.matcurves[1,:], rod.B * (matcurvegrad(rod, 2, 1) - matcurvegrad(rod, 2, 2))) / rod.voronoi[2]
+                    -dot(rod.matcurves[2,:], rod.B * matcurvegrad(rod, 3, 2)) / rod.voronoi[3]
     )
     for i in 3:(rod.n-2)
-        force[i, :] = (dot(rod.matcurves[i-1,:], rod.B * (matcurvegrad(rod, i, i-1) - matcurvegrad(i, i))) / rod.voronoi[i]
+        force[i, :] = (dot(rod.matcurves[i-1,:], rod.B * (matcurvegrad(rod, i, i-1) - matcurvegrad(rod, i, i))) / rod.voronoi[i]
                         +dot(rod.matcurves[i-2,:], rod.B * matcurvegrad(rod, i-1, i-1)) / rod.voronoi[i-1]
-                        -dot(rod.matcurves[i,:], rod.B * matcurvegrad(i+1, i)) / rod.voronoi[i+1]
+                        -dot(rod.matcurves[i,:], rod.B * matcurvegrad(rod, i+1, i)) / rod.voronoi[i+1]
         )
     end #for
     force[end-1, :] = (dot(rod.matcurves[rod.n-2,:], rod.B * (matcurvegrad(rod, rod.n-1, rod.n-2) - matcurvegrad(rod.n-1, rod.n-1))) / rod.voronoi[rod.n-1]
