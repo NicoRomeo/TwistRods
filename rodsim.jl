@@ -116,6 +116,8 @@ function main()
     println(rod4.kb)
     println(rod4.matcurves)
 
+    println(bForce(rod4))
+
     print("\n___end test___\n")
 
 end
