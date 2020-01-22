@@ -396,12 +396,12 @@ Computes the twist energy of oRod
 """
 function tEnergy(rod::oRod, beta::Float64)
     E = 0.0
-    twist = Array{Float64}(undef,rod.n - 1,1) #array of twist
-    for i = 1:rod.n-1
-        twist[i] = rod.theta[i+1] - rod.theta[i]
+    twist = Array{Float64}(undef,1) #array of twist
+    for i = 2:n
+        twist[i-1] = rod.theta[i] - rod.theta[i-1]
     end
-    for i = 1:rod.n-1
-        E += (twist[i]^2) * beta / rod.voronoi[i+1]
+    for i = 2:n
+        E += (twist[i-1]^2) * beta / (2 * rod.voronoi[i])
     end
     return E
 end # function. note: ignored bounds, requires fixing
@@ -500,6 +500,7 @@ function matcurvegrad(rod::oRod)
                            cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 1])) /
                           norm(rod.edges[i-1, :])
     end #for
+    return res
 end #function
 
 
@@ -511,16 +512,21 @@ Computes the forces due to bending and twist elasticity, where matcg is the matc
 """
 function bForce(rod::oRod, matcg)
     force = Array{Float64}(undef, rod.n, 3)
-    force[1, :] = - dot(rod.matcurves[1,:], rod.B * matcg[1, 1, :, :])) / rod.voronoi[2]
 
-    for i in 2:(rod.n-1)
-        force[i, :] = (dot(rod.matcurves[i-1,:], rod.B * (matcg[i, 1, :, :] - matcg[i, 2, :, :])) / rod.voronoi[i]
-                        +dot(rod.matcurves[i-2,:], rod.B * matcurvegrad(rod, i-1, i-1)) / rod.voronoi[i-1]
-                        -dot(rod.matcurves[i,:], rod.B * matcurvegrad(rod, i+1, i)) / rod.voronoi[i+1]
-        )
+    A = zeros(rod.n-2, 3)
+    B = zeros(rod.n-2, 3)
+    for i in 1:rod.n-2
+        A[i, :] = dot(rod.matcurves[i,:], rod.B * matcg[i, 1, :, :]) / rod.voronoi[i+1]
+        B[i, :] = dot(rod.matcurves[i,:], rod.B * matcg[i, 2, :, :]) / rod.voronoi[i+1]
+    end
+
+    force[1, :] =  A[1,:]
+    force[2, :] = A[1, :]- A[2,:] + B[1,:]
+    for i in 3:(rod.n-2)
+        force[i, :] = A[i, :]- A[i-1,:] + B[i-1,:] - B[i-2,:]
     end #for
-
-    force[end, :] = dot(rod.matcurves[end,:], rod.B * matcurvegrad(rod, rod.n-1, rod.n-1)) / rod.voronoi[rod.n-1]
+    force[rod.n-1, :] = - A[rod.n-2,:] + B[rod.n-2,:] - B[rod.n-3,:]
+    force[end, :] = - B[end, :]
 end # function
 
 

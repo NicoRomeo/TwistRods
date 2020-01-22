@@ -115,8 +115,8 @@ function main()
     println(rod4.frame[:,:,1])
     println(rod4.kb)
     println(rod4.matcurves)
-
-    println(bForce(rod4))
+    matcg = matcurvegrad(rod4)
+    println(bForce(rod4, matcg))
 
     print("\n___end test___\n")
 
