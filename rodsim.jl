@@ -94,7 +94,7 @@ function main()
 
     print("\n___Rod4___\n")
     X = zeros(Float64, 3, 3)
-    phi = 0.01
+    phi = pi/2
     radius = 1.0
 
     X[1, 1] = radius
@@ -116,8 +116,10 @@ function main()
     println(rod4.kb)
     println(rod4.matcurves)
     matcg = matcurvegrad(rod4)
+    print(size(matcg))
     println("Matcg")
-    println(matcg)
+    println(matcg[1,1,:,:])
+    println(matcg[1, 2, :, :])
     println("End matcg")
     f = bForce(rod4, matcg)
     println(f)

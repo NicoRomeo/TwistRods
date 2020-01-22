@@ -484,26 +484,32 @@ first index is i, 2nd index corresponds to 1 j= i-1 or 2 j=i, third and fourth a
 """
 function matcurvegrad(rod::oRod)
     res = zeros(rod.n - 2, 2, 2, 3)
+    res[1, 1, 1, :] =(-rod.matcurves[1, 1] * rod.ttilda[1, :] +
+                       cross(rod.frame[2, :, 1], rod.dtilda[1, :, 2])) /
+                      norm(rod.edges[1, :])
+    res[1, 1, 2, :] = (rod.matcurves[1, 2] * rod.ttilda[1, :] -
+                        cross(rod.frame[2, :, 1], rod.dtilda[1, :, 1])) /
+                      norm(rod.edges[1, :])
     res[1, 2, 1, :] = (-rod.matcurves[1, 1] * rod.ttilda[1, :] -
                        cross(rod.frame[1, :, 1], rod.dtilda[1, :, 2])) /
-                      norm(rod.edges[1, :])
+                      norm(rod.edges[2, :])
     res[1, 2, 2, :] = (rod.matcurves[1, 2] * rod.ttilda[1, :] +
                        cross(rod.frame[1, :, 1], rod.dtilda[1, :, 1])) /
-                      norm(rod.edges[1, :])
+                      norm(rod.edges[2, :])
     for i = 2:rod.n-2
         res[i, 1, 1, :] = (-rod.matcurves[i, 1] * rod.ttilda[i, :] +
-                           cross(rod.frame[i, :, 1], rod.dtilda[i, :, 2])) /
-                          norm(rod.edges[i-1, :])
+                           cross(rod.frame[i+1, :, 1], rod.dtilda[i, :, 2])) /
+                          norm(rod.edges[i, :])
         res[i, 1, 2, :] = (rod.matcurves[i, 2] * rod.ttilda[i, :] -
-                           cross(rod.frame[i, :, 1], rod.dtilda[i, :, 1])) /
-                          norm(rod.edges[i-1, :])
+                           cross(rod.frame[i+1, :, 1], rod.dtilda[i, :, 1])) /
+                          norm(rod.edges[i, :])
 
         res[i, 2, 1, :] = (-rod.matcurves[i, 1] * rod.ttilda[i, :] -
-                           cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 2])) /
-                          norm(rod.edges[i-1, :])
+                           cross(rod.frame[i, :, 1], rod.dtilda[i, :, 2])) /
+                          norm(rod.edges[i+1, :])
         res[i, 2, 2, :] = (rod.matcurves[i, 2] * rod.ttilda[i, :] +
-                           cross(rod.frame[i-1, :, 1], rod.dtilda[i, :, 1])) /
-                          norm(rod.edges[i-1, :])
+                           cross(rod.frame[i, :, 1], rod.dtilda[i, :, 1])) /
+                          norm(rod.edges[i, :])
     end #for
     return res
 end #function
