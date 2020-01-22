@@ -95,7 +95,7 @@ struct oRod <: aRod # structure for open rod
         normal = cat(transpose(normal[1, :]), normal, dims = 1)
         binormal = Array{Float64}(undef, n - 1, 3)
         for i = 1:n-1
-            binormal[i, :] = normalize!(cross(edges[i,:], normal[i,:]))
+            binormal[i, :] = normalize!(cross(edges[i, :], normal[i, :]))
         end
         norm_edges = Array{Float64}(undef, n - 1, 3)
         for i = 1:n-1
@@ -237,7 +237,8 @@ end # function
 
 function kb(rod::oRod)
     for i = 1:(rod.n-2)
-        rod.kb[i, :] = (2.0 * cross(rod.frame[i, :, 1], rod.frame[i + 1, :, 1]) / rod.chi[i])
+        rod.kb[i, :] = (2.0 * cross(rod.frame[i, :, 1], rod.frame[i+1, :, 1]) /
+                        rod.chi[i])
     end
 end # function
 
@@ -248,7 +249,8 @@ Updates the quantity t tilda
 Interior Quantity
 """
 function ttilda(rod::oRod)
-    rod.ttilda[:,:] = (rod.frame[1:end-1, :, 1] + rod.frame[2:end, :, 1]) ./ rod.chi  #To test!
+    rod.ttilda[:, :] = (rod.frame[1:end-1, :, 1] + rod.frame[2:end, :, 1]) ./
+                       rod.chi  #To test!
 end # function
 
 
@@ -259,8 +261,10 @@ Computes the abreviation d tilda. Array of d_1 tilda and d_2 tilda, each being a
 Interior Quantity
 """
 function dtilda(rod::oRod)
-    rod.dtilda[:, :, 1] .= (rod.frame[1:end-1, :, 2] + rod.frame[2:end, :, 2]) ./ rod.chi
-    rod.dtilda[:, :, 2] .= (rod.frame[1:end-1, :, 3] + rod.frame[2:end, :, 3]) ./ rod.chi
+    rod.dtilda[:, :, 1] .= (rod.frame[1:end-1, :, 2] +
+                            rod.frame[2:end, :, 2]) ./ rod.chi
+    rod.dtilda[:, :, 2] .= (rod.frame[1:end-1, :, 3] +
+                            rod.frame[2:end, :, 3]) ./ rod.chi
 end # function
 
 """
@@ -294,12 +298,14 @@ end # function
 function matcurve(rod::oRod) ## kappa_1 and kappa_2 in Bergou Discrete Viscous Threads
     kappa = Array{Float64}(undef, rod.n - 2, 2) #matcurve is interior quantity
 
-    for i = 2:rod.n - 1
-        kappa[i-1, 1] = 0.5 * rod.chi[i-1] * dot(rod.dtilda[i-1,:,2], rod.kb[i-1,:])
-        kappa[i-1, 2] = -0.5 * rod.chi[i-1] * dot(rod.dtilda[i-1,:,1], rod.kb[i-1,:])
+    for i = 2:rod.n-1
+        kappa[i-1, 1] = 0.5 * rod.chi[i-1] *
+                        dot(rod.dtilda[i-1, :, 2], rod.kb[i-1, :])
+        kappa[i-1, 2] = -0.5 * rod.chi[i-1] *
+                        dot(rod.dtilda[i-1, :, 1], rod.kb[i-1, :])
 
     end
-    rod.matcurves[:,:] = kappa[:,:]
+    rod.matcurves[:, :] = kappa[:, :]
     return kappa
 end # function
 
@@ -382,9 +388,8 @@ Computes the bending energy of oRod
 function bEnergy(rod::oRod)
     E = 0.0
     kappa = rod.matcurves
-    for i = 2:rod.n - 1
-        E += dot(kappa[i-1,:], rod.B * kappa[i-1, :]) /
-             (2.0 * rod.voronoi[i])
+    for i = 2:rod.n-1
+        E += dot(kappa[i-1, :], rod.B * kappa[i-1, :]) / (2.0 * rod.voronoi[i])
     end
     return E
 end # function
@@ -396,7 +401,7 @@ Computes the twist energy of oRod
 """
 function tEnergy(rod::oRod, beta::Float64)
     E = 0.0
-    twist = Array{Float64}(undef,1) #array of twist
+    twist = Array{Float64}(undef, 1) #array of twist
     for i = 2:n
         twist[i-1] = rod.theta[i] - rod.theta[i-1]
     end
@@ -515,18 +520,18 @@ function bForce(rod::oRod, matcg)
 
     A = zeros(rod.n, 3)
     B = zeros(rod.n, 3)
-    for i in 1:rod.n-2
-        A[i+1, :] = transpose(rod.matcurves[i,:]) * rod.B * matcg[i, 1, :, :] / rod.voronoi[i+1]
-        B[i+1, :] = transpose(rod.matcurves[i,:]) * rod.B * matcg[i, 2, :, :] / rod.voronoi[i+1]
+    for i = 1:rod.n-2
+        A[i+1, :] = transpose(rod.matcurves[i, :]) * rod.B * matcg[i, 1, :, :] /
+                    rod.voronoi[i+1]
+        B[i+1, :] = transpose(rod.matcurves[i, :]) * rod.B * matcg[i, 2, :, :] /
+                    rod.voronoi[i+1]
     end
 
-    force[1, :] =  A[2,:]
-    #force[2, :] = A[1, :]- A[2,:] + B[1,:]
-    for i in 2:(rod.n-1)
-        force[i, :] = A[i+1, :]- A[i,:] + B[i,:] - B[i-1,:]
+    force[1, :] = A[2, :]
+    for i = 2:(rod.n-1)
+        force[i, :] = A[i+1, :] - A[i, :] + B[i, :] - B[i-1, :]
     end #for
-    #force[rod.n-1, :] = - A[rod.n-2,:] + B[rod.n-2,:] - B[rod.n-3,:]
-    force[end, :] = - B[end-1, :]
+    force[end, :] = -B[end-1, :]
     return force
 end # function
 
