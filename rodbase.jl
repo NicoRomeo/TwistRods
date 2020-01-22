@@ -396,12 +396,12 @@ Computes the twist energy of oRod
 """
 function tEnergy(rod::oRod, beta::Float64)
     E = 0.0
-    twist = Array{Float64}(undef,1) #array of twist
-    for i = 2:n
-        twist[i-1] = rod.theta[i] - rod.theta[i-1]
+    twist = Array{Float64}(undef,rod.n - 1,1) #array of twist
+    for i = 1:rod.n-1
+        twist[i] = rod.theta[i+1] - rod.theta[i]
     end
-    for i = 2:n
-        E += (twist[i-1]^2) * beta / (2 * rod.voronoi[i])
+    for i = 1:rod.n-1
+        E += (twist[i]^2) * beta / rod.voronoi[i+1]
     end
     return E
 end # function. note: ignored bounds, requires fixing
