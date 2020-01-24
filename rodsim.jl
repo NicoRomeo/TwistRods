@@ -40,6 +40,12 @@ function runstep(rod::aRod) where {T<:Number}
 
 end
 
+
+function datapoint(rod::aRod, measure::Measure)
+
+end #function
+
+
 function runsim(sim::Simulation)
     rod = sim.rod
     param = sim.param
@@ -48,8 +54,11 @@ function runsim(sim::Simulation)
     N = get(sim.param, "N")
     for i in range(N)
         runstep(rod, param_array)
-    end
-end
+        if i%n_measure == 0
+            datapoint(rod, sim.measure)
+        end #if
+    end #for
+end #function
 
 
 function main()
@@ -98,6 +107,7 @@ function main()
     println(matcg[1, 2, :, :])
     println("End matcg")
     f = bForce(rod3, matcg)
+    println(f)
 
     print("\n___Rod4___\n")
     X = zeros(Float64, 3, 3)
