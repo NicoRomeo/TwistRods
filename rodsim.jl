@@ -7,9 +7,6 @@ using StaticArrays
 using Statistics
 using NLsolve
 using Random
-
-ENV["PLOTS_USE_ATOM_PLOTPANE"] = "false"
-
 using Plots
 
 include("rodbase.jl")
@@ -128,7 +125,6 @@ function main()
         for j in 1:rod3.n
             push!(plt, rod3.X[j,1],rod3.X[j,2],rod3.X[j,3])
         end
-        display(plt)
     end every 100
 
     #print("\n___Rod4___\n")
