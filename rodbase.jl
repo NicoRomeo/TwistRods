@@ -541,6 +541,18 @@ function bForce(rod::oRod, matcg)
     return force
 end # function
 
+"""
+ex_euler(rod::oRod, tstep::Float64)
+
+returns updated vertices after delta t = timestep using explicit euler
+"""
+# (bForce * delta t) + current vertices = new vertices
+
+function ex_euler(rod::oRod,tstep::Float64, bF)
+    I = UniformScaling(tstep)
+    rod.X[:] = rod.X[:] + (bF * I)[:]
+    return rod.X
+end #function
 
 ###### collision handling ####
 """
