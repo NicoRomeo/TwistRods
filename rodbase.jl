@@ -549,8 +549,9 @@ returns updated vertices after delta t = timestep using explicit euler
 # (bForce * delta t) + current vertices = new vertices
 
 function ex_euler(rod::oRod,tstep::Float64, bF)
-    I = UniformScaling(tstep)
-    rod.X[:] = rod.X[:] + (bF * I)[:]
+    for i = 1:rod.n
+        rod.X[i,:] = rod.X[i,:] + (bF * tstep)[i,:]
+    end #for
     return rod.X
 end #function
 
