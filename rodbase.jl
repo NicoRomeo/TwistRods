@@ -555,6 +555,38 @@ function ex_euler(rod::oRod,tstep::Float64, bF)
     return rod.X
 end #function
 
+function updaterod(rod::oRod)
+    midpoints(rod)
+    vDom(rod)
+    chi(rod)
+    #kb uses chi for calcs
+    kb(rod)
+    #ttilda + dtilda uses chi for calcs
+    ttilda(rod)
+    dtilda(rod)
+    #uses dtilda, chi, kb
+    matcurve(rod)
+    matcg = matcurvegrad(rod)
+    bf = bForce(rod, matcg)
+    return matcg, bf
+end #function
+
+function implicit(rod::oRod, tstep::Float64, bF)
+    copyrod = deepcopy(rod)
+
+    updaterod(copyrod)
+    matcg = matcurvegrad(rod)
+    bf = bForce(rod, matcg)
+    target = rod.X
+    for i = 1:rod.n
+        copyrod.X[i,:] = copyrod.X[i,:] + (bf * tstep)[i,:]
+    end #for
+
+    rod = newtonrod(copyrod, target, tstep, 1e-3)
+
+
+return #function
+
 ###### collision handling ####
 """
     dist(aRod)
