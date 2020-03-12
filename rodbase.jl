@@ -66,6 +66,9 @@ struct oRod <: aRod # structure for open rod
     len::Float64
     midp::Array{Float64,2}
     edges::Array{Float64,2}
+    norm_edges::Array{Float64,2}
+    phi::Array{Float64,2} #angles between edges
+
     voronoi::Array{Float64,1}
 
     kb::Array{Float64,2}  # Discrete curvature binormal scalar function.
@@ -97,11 +100,18 @@ struct oRod <: aRod # structure for open rod
         for i = 1:n-1
             binormal[i, :] = normalize!(cross(edges[i, :], normal[i, :]))
         end
-        norm_edges = Array{Float64}(undef, n - 1, 3)
+
+        norm_ed = Array{Float64}(undef,n-1,3)
         for i = 1:n-1
-            norm_edges[i, :] = normalize(edges[i, :])
+            norm_ed[i, :] = normalize(edges[i, :])
         end
-        frame = cat(norm_edges, normal, binormal, dims = 3)
+
+        phi_temp = Array{Float64,2}(undef, n-2,1)
+        for i = 1:n-2
+            phi_temp[i] = pi - acos(dot(norm_ed[i,:],norm_ed[i+1,:]))
+        end #loop
+
+        frame = cat(norm_ed, normal, binormal, dims = 3)
         chi = Array{Float64}(undef, n - 2)
         for i = 1:n-2
             chi[i] = 1 .+ dot(frame[i, :, 1], frame[i+1, :, 1])
@@ -125,6 +135,8 @@ struct oRod <: aRod # structure for open rod
             len,
             midp,
             edges,
+            norm_ed, #norm_edges
+            phi_temp, #angles between edges
             vor,
             kb,
             chi,
@@ -159,6 +171,18 @@ end # function
 function update_edges(rod::oRod)
     rod.edges .= rod.X[2:end, :] .- rod.X[1:end-1, :]
 end # function
+
+function updates_norm_edges(rod::oRod)
+    for i = 1:rod.n-1
+        rod.norm_edges[i, :] = normalize(rod.edges[i, :])
+    end
+end #function
+
+function update_phi(rod::oRod)
+    for i = 1:rod.n-2
+        rod.phi[i] = acos(dot(rod.norm_edges[i,:],rod.norm_edges[i+1,:]))
+    end #loop
+end #function
 
 """
     vDom(cRod)
@@ -381,15 +405,55 @@ function bForce(rod::cRod)
 end
 
 """
-    bEnergy(rod::oRod)
+    phi
+Computes angles between edges
+
+ADDED TO STRUCTURE
+
+    kb_scal
+Computes scalar integrated kb
+"""
+
+function kb_mag(rod::oRod)
+     kb_mag = Array{Float64}(undef, rod.n - 2)
+     for i = 1:rod.n-2
+         kb_mag[i] = rod.phi[i]/rod.voronoi[i]
+     end #for loop
+     return kb_mag
+end
+
+"""
+    bEnergy(rod::oRod) #ISOTROPIC:
 
 Computes the bending energy of oRod
 """
-function bEnergy(rod::oRod)
+function bEnergy_isotropic(rod::oRod, alpha::Float64, kb_mag::Array{Float64})
+    E = 0.0
+    for i = 1:rod.n-2
+        E += alpha * (kb_mag[i]^2) * (1/(rod.voronoi[i]*2))
+    end
+    return E
+end # function
+
+# function bEnergy_isotropic(rod::oRod, alpha::Float64)
+#     E = 0.0
+#     for i = 1:rod.n-2
+#         E += alpha * dot(rod.kb[i,:],rod.kb[i,:]) * (1/(rod.voronoi[i]*2))
+#     end
+#     return E
+# end # function
+
+
+"""
+    bEnergy(rod::oRod) #ANISOTROPIC:
+
+Computes the bending energy of oRod
+"""
+function bEnergy_anisotropic(rod::oRod)
     E = 0.0
     kappa = rod.matcurves
     for i = 2:rod.n-1
-        E += dot(kappa[i-1, :], rod.B * kappa[i-1, :]) / (2.0 * rod.voronoi[i])
+        E += dot(kappa[i-1, :], rod.B * kappa[i-1, :]) / (2 * rod.voronoi[i])
     end
     return E
 end # function
@@ -585,7 +649,7 @@ function implicit(rod::oRod, tstep::Float64, bF)
     rod = newtonrod(copyrod, target, tstep, 1e-3)
 
 
-return #function
+end #function
 
 ###### collision handling ####
 """
