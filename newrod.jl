@@ -83,7 +83,7 @@ function energy(X, theta, u0, p, t)
     return Ebend + Etwist
 end
 
-function energydict(X, theta, u0, p)
+function energydict(X::AbstractArray, theta::AbstractArray, u0::AbstractArray, p)
     n = p[1]
     l0 = p[2]
     B = [1 0; 0 1]
@@ -101,8 +101,7 @@ function energydict(X, theta, u0, p)
     tangent[1] = normd(edges[1])
     ell[1] = .5 * sqrt(edges[1]'edges[1])
 
-    m = diff(theta) #Dict(i => theta[i+1] - theta[i] for i in 1:n-1)
-
+    m = diff(theta, dims=1) #Dict(i => theta[i+1] - theta[i] for i in 1:n-1)
 
     # Bishop frame
     u = Dict{Int32, Array{Float64,1}}()
@@ -146,21 +145,25 @@ function energydict(X, theta, u0, p)
 end # function
 
 
-function state2vars()
+function state2vars(state::Array{Float64, 2})
     x = state[1:3, 2:end]
     theta = state[4, 2:end-1]
     u0 = state[1:3, 1]
     return (x, theta, u0)
 end
 
-function vars2state(x, theta, u0)
+function vars2state(x::Array{Float64}, theta::Array{Float64}, u0::Array{Float64})
     h = vcat(u0, 0)
     t = vcat(theta, 0)
     xt = vcat(x, t')
     return hcat(h, xt)
 end
 
-function force(state, param, t)
+function rotatea2b(a::Array{Float64,1},b::Array{Float64,1})
+    return 2. * (a+b) * (a+b)'/((a+b)'*(a+b)) - [1 0 0; 0 1 0; 0 0 1]
+end
+
+function force(ds, state::Array{Float64, 2}, param, t)
     # unpack state variables
     pos = state[1:3, 2:end]
     theta = state[4, 2:end-1]
@@ -170,23 +173,37 @@ function force(state, param, t)
     Et = t -> energydict(pos, t, u0, param)
 
     fx = -1. * Flux.gradient(Ex, pos)[1]
-    ft = -1. * Flux.gradient(Et, pos)[1]
+    ft = -1. * Flux.gradient(Et, theta)[1]
+
     # update u0...
-    fu0 = u0
+    fu0 = fx[:,2] - fx[:,1]
 
-
-    return vars2state(fx, ft, fu0)
+    ds = vars2state(fx, ft, fu0)
 end
 
 
 g(u,p,t) = 0.  # noise function
 
-tspan = (0.0, 1.)
+tspan = (0.0, 3.)
 param = [3, 1]
 N = 3
 l0 = 1
 param = [N, l0]  #parameter vector
-pos_0 = transpose([0 0 0 0; 0 1 0 0; 1 1 0 0])
+pos_0 = transpose([0. 0. 0.; 0. 1. 0.; 1. 1. 0.])
+theta_0 = [0., 0.]
+u_0 = [1., 0., 0.]
+
+state_0 = vars2state(pos_0, theta_0, u_0)
 # pos_0 =
 #param = [1, 1, 2]  #parameter vector
-prob = SDEProblem(force, g, pos_0, tspan, param)
+
+#prob = SDEProblem(force, g, state_0, tspan, param)
+
+MassMatrix = diagm(vcat(ones(Float64, 3), ones(Float64, 3*N), zeros(Float64, N-1)))
+
+prob = ODEProblem(force, state_0, tspan, param)
+
+sol = solve(prob, Tsit5(), reltol=1e-8, abstol=1e-8)
+
+times = sol.t
+plot(times, sol(times)[1:3,3])
