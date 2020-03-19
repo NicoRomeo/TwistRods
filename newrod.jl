@@ -85,6 +85,7 @@ end
 
 function energydict(X, theta, u0, p)
     n = p[1]
+    l0 = p[2]
     B = [1 0; 0 1]
 
     # edges, tangent, kb, phi
@@ -114,8 +115,9 @@ function energydict(X, theta, u0, p)
     v[1] = cross(tangent[1], u[1])
     m1[1] = cos(theta[1]) * u[1] + sin(theta[1]) * v[1]
     m2[1] = -sin(theta[1]) * u[1] + cos(theta[1]) * v[1]
-    Ebend = 0
-    Etwist = 0
+    Ebend = 0.
+    Etwist = 0.
+    Estretch = (edges[1] .- l0)' * (edges[1] .- l0)
     for i in 1:(n-2)
         edges[i+1] = X[:,i+2] - X[:,i+1]
         tangent[i+1] = normd(edges[i+1])
@@ -135,8 +137,11 @@ function energydict(X, theta, u0, p)
         #missing def of ell
         Ebend += k' * B * k / ell[i+1]
         Etwist += m[i] .^2 / ell[i+1]
+        s = edges[i+1] .- l0
+        Estretch += s's
     end
     Ebend = .5 * Ebend
+    Estretch = .5 * Estretch
     return Ebend + Etwist
 end # function
 
