@@ -142,19 +142,51 @@ function energydict(X, theta, u0, p)
     end
     Ebend = .5 * Ebend
     Estretch = .5 * Estretch
-    return Ebend + Etwist
+    return Ebend + Etwist + Estretch
 end # function
 
-function force(pos, param, t)
-    f = x -> energydict(x, param, t)
-    return -1 .* Flux.gradient(f, pos)
+
+function state2vars()
+    x = state[1:3, 2:end]
+    theta = state[4, 2:end-1]
+    u0 = state[1:3, 1]
+    return (x, theta, u0)
+end
+
+function vars2state(x, theta, u0)
+    h = vcat(u0, 0)
+    t = vcat(theta, 0)
+    xt = vcat(x, t')
+    return hcat(h, xt)
+end
+
+function force(state, param, t)
+    # unpack state variables
+    pos = state[1:3, 2:end]
+    theta = state[4, 2:end-1]
+    u0 = state[1:3, 1]
+    # define fucntions for energy/gradient
+    Ex = x -> energydict(x, theta, u0, param)
+    Et = t -> energydict(pos, t, u0, param)
+
+    fx = -1. * Flux.gradient(Ex, pos)[1]
+    ft = -1. * Flux.gradient(Et, pos)[1]
+    # update u0...
+    fu0 = u0
+
+
+    return vars2state(fx, ft, fu0)
 end
 
 
-g(u,p,t) = 1.  # noise function
+g(u,p,t) = 0.  # noise function
 
 tspan = (0.0, 1.)
-N=6
-pos_0 = rand(4, N)
-param = [1, 1, 2]  #parameter vector
+param = [3, 1]
+N = 3
+l0 = 1
+param = [N, l0]  #parameter vector
+pos_0 = transpose([0 0 0 0; 0 1 0 0; 1 1 0 0])
+# pos_0 =
+#param = [1, 1, 2]  #parameter vector
 prob = SDEProblem(force, g, pos_0, tspan, param)
