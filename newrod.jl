@@ -19,8 +19,8 @@ function initialize()
 
 end # func
 
-function curvebnom(x, frames)
-
+function normd(x)
+    return x/sqrt(x'x)
 end
 
 function energy(X, theta, u0, p, t)
@@ -29,10 +29,9 @@ function energy(X, theta, u0, p, t)
 
     edges = diff(X, dims=2)
     m = diff(theta)
-    print(size(edges))
 
     tangent = zeros(Float64, (3, n-1))
-    
+
     for i in 1:(n-1)
         tangent[:,i] = normalize(edges[:,i])
     end
@@ -81,13 +80,68 @@ function energy(X, theta, u0, p, t)
 
     Etwist = sum(m .^2 ./ ell[2:n-1])
 
-
-
     return Ebend + Etwist
 end
 
+function energydict(X, theta, u0, p)
+    n = p[1]
+    B = [1 0; 0 1]
+
+    # edges, tangent, kb, phi
+    edges = Dict{Int32, Array{Float64,1}}()
+    tangent = Dict{Int32, Array{Float64,1}}()
+    kb = Dict{Int32, Array{Float64,1}}()
+    phi = Dict{Int32, Float64}()
+
+    # voronoi domain
+    ell = Dict{Int32, Float64}()
+
+    edges[1] = X[:,2] - X[:,1]
+    tangent[1] = normd(edges[1])
+    ell[1] = .5 * sqrt(edges[1]'edges[1])
+
+    m = diff(theta) #Dict(i => theta[i+1] - theta[i] for i in 1:n-1)
+
+
+    # Bishop frame
+    u = Dict{Int32, Array{Float64,1}}()
+    v = Dict{Int32, Array{Float64,1}}()
+    # Material frame
+    m1 = Dict{Int32, Array{Float64,1}}()
+    m2 = Dict{Int32, Array{Float64,1}}()
+
+    u[1] = normd(u0)
+    v[1] = cross(tangent[1], u[1])
+    m1[1] = cos(theta[1]) * u[1] + sin(theta[1]) * v[1]
+    m2[1] = -sin(theta[1]) * u[1] + cos(theta[1]) * v[1]
+    Ebend = 0
+    Etwist = 0
+    for i in 1:(n-2)
+        edges[i+1] = X[:,i+2] - X[:,i+1]
+        tangent[i+1] = normd(edges[i+1])
+        kb[i] = 2 .* cross(tangent[i], tangent[i+1])/(1 + tangent[i]'tangent[i+1])
+        kbn = sqrt(kb[i]'kb[i])
+        phi[i] = 2*atan(kbn/2)
+
+        ax = kb[i]/kbn
+
+        ell[i+1] = .5 * (sqrt(edges[i]'edges[i]) + sqrt(edges[i+1]'edges[i+1]))
+
+        u[i+1] = dot(ax, u[i]) * ax + cos(phi[i]) *cross(cross(ax, u[i]), ax) + sin(phi[i]) * cross(ax, u[i])
+        v[i+1] = cross(tangent[i+1], u[i+1])
+        m1[i+1] = cos(theta[i+1]) * u[i+1] + sin(theta[i+1]) * v[i+1]
+        m2[i+1] = -sin(theta[i+1]) * u[i+1] + cos(theta[i+1]) * v[i+1]
+        k = .5 * [dot(kb[i], m2[i] + m2[i+1]), -dot(kb[i], m1[i] + m1[i+1])]
+        #missing def of ell
+        Ebend += k' * B * k / ell[i+1]
+        Etwist += m[i] .^2 / ell[i+1]
+    end
+    Ebend = .5 * Ebend
+    return Ebend + Etwist
+end # function
+
 function force(pos, param, t)
-    f = x -> energy(x, param, t)
+    f = x -> energydict(x, param, t)
     return -1 .* Flux.gradient(f, pos)
 end
 
@@ -95,7 +149,7 @@ end
 g(u,p,t) = 1.  # noise function
 
 tspan = (0.0, 1.)
-
-pos_0 = rand(4, n)
+N=6
+pos_0 = rand(4, N)
 param = [1, 1, 2]  #parameter vector
 prob = SDEProblem(force, g, pos_0, tspan, param)
