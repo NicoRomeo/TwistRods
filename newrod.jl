@@ -189,7 +189,11 @@ param = [3, 1]
 N = 3
 l0 = 1
 param = [N, l0]  #parameter vector
-pos_0 = transpose([0. 0. 0.; 0. 1. 0.; 1. 1. 0.])
+pos_0 = permutedims([0. 0. 0.; 0. 1. 0.; 1. 1. 0.],(2,1))
+
+println("this is pos_0: ")
+println(pos_0)
+
 theta_0 = [0., 0.]
 u_0 = [1., 0., 0.]
 
