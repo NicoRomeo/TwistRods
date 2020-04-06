@@ -190,7 +190,8 @@ function energy_clean(
     m2 = -sin(theta[1]) * u + cos(theta[1]) * v
     Ebend = 0.0
     Etwist = 0.0
-    Estretch = (edges .- l0)' * (edges .- l0)
+    s = edges'edges - l0
+    Estretch = s's
     for i = 1:(n-2)
         edges_1 = X[:, i+2] - X[:, i+1]
         tangent_1 = normd(edges_1)
@@ -213,8 +214,8 @@ function energy_clean(
 
         Ebend += k' * B * k / ell
         Etwist += m[i] .^ 2 / ell
-        s = edges_1 .- l0
-        Estretch += s's
+        s = edges_1'edges_1 .- l0
+        Estretch += s*s
         # update for next vertex
         edges = edges_1
         tangent = tangent_1
@@ -223,7 +224,7 @@ function energy_clean(
     end
     Ebend = 0.5 * Ebend
     Estretch = 0.5 * Estretch
-    return Ebend + Etwist + Estretch
+    return Ebend
 end # function
 
 
@@ -278,8 +279,13 @@ l0 = 1
 param = [N, l0]  #parameter vector
 pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0], (2, 1))
 
+#straight line
+#pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 4.0 0.0], (2, 1))
+
 println("this is pos_0: ")
 println(pos_0)
+
+#pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
 
 theta_0 = [0.0, 0.0]
 u_0 = [1.0, 0.0, 0.0]
@@ -298,7 +304,7 @@ MassMatrix =
 Ex = x -> energy_clean(x, theta_0, u_0, param)
 Et = t -> energy_clean(pos_0, t, u_0, param)
 
-fx = -1.0 * Flux.gradient(Ex, pos_0)[1]
+fx = Flux.gradient(Ex, pos_0)[1]
 ft = -1.0 * Flux.gradient(Et, theta_0)[1]
 
 # prob = ODEProblem(force, state_0, tspan, param)
