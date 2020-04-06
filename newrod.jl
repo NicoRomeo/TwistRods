@@ -197,16 +197,16 @@ function energy_clean(
         tangent_1 = normd(edges_1)
         kb = 2 .* cross(tangent, tangent_1) / (1 + tangent'tangent_1)
         kbn = sqrt(kb'kb)
+        ell = 0.5 * (sqrt(edges'edges) + sqrt(edges_1'edges_1))
         phi = 2 * atan(kbn / 2)
 
-        ax = kb / kbn
-
-        ell = 0.5 * (sqrt(edges'edges) + sqrt(edges_1'edges_1))
-
-        u =
-            dot(ax, u) * ax +
-            cos(phi) * cross(cross(ax, u), ax) +
-            sin(phi) * cross(ax, u)
+        if !isapprox(kbn, 0.0)
+            ax = kb / kbn
+            u =
+                dot(ax, u) * ax +
+                cos(phi) * cross(cross(ax, u), ax) +
+                sin(phi) * cross(ax, u)
+        end
         v = cross(tangent_1, u)
         m1_1 = cos(theta[i+1]) * u + sin(theta[i+1]) * v
         m2_1 = -sin(theta[i+1]) * u + cos(theta[i+1]) * v
@@ -280,7 +280,7 @@ param = [N, l0]  #parameter vector
 pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0], (2, 1))
 
 #straight line
-#pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 4.0 0.0], (2, 1))
+#pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 0.0], (2, 1))
 
 println("this is pos_0: ")
 println(pos_0)
@@ -304,7 +304,7 @@ MassMatrix =
 Ex = x -> energy_clean(x, theta_0, u_0, param)
 Et = t -> energy_clean(pos_0, t, u_0, param)
 
-fx = Flux.gradient(Ex, pos_0)[1]
+fx = -1.0 * Flux.gradient(Ex, pos_0)[1]
 ft = -1.0 * Flux.gradient(Et, theta_0)[1]
 
 # prob = ODEProblem(force, state_0, tspan, param)
