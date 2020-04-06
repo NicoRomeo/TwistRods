@@ -199,10 +199,9 @@ function energy_clean(
         phi = 2 * atan(kbn / 2)
 
         ax = kb / kbn
-        print(size(ax))
+
         ell = 0.5 * (sqrt(edges'edges) + sqrt(edges_1'edges_1))
-        print(size(u))
-        print(phi)
+
         u =
             dot(ax, u) * ax +
             cos(phi) * cross(cross(ax, u), ax) +
@@ -224,7 +223,7 @@ function energy_clean(
     end
     Ebend = 0.5 * Ebend
     Estretch = 0.5 * Estretch
-    return Ebend #+ Etwist + Estretch
+    return Ebend + Etwist + Estretch
 end # function
 
 
