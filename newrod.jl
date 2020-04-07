@@ -240,22 +240,26 @@ function vars2state(
     theta::Array{Float64},
     u0::Array{Float64},
 )
-    h = vcat(u0, 0)
-    t = vcat(theta, 0)
-    xt = vcat(x, t')
-    return hcat(h, xt)
+    return vcat(u0, vec(x), theta)
+end
+
+function state2vars(state::Array{Float64,1}, n::Integer)
+    pos = reshape(state[4:3*(n+1)], (3, n))
+    theta = state[3*n+4:end]
+    u0 = state[1:3]
+    return (u0, pos, theta)
 end
 
 function rotatea2b(a::Array{Float64,1}, b::Array{Float64,1})
-    return 2.0 * (a + b) * (a + b)' / ((a + b)' * (a + b)) -
-           [1 0 0; 0 1 0; 0 0 1]
+    return 2.0 * (a + b) * (a + b)' / ((a + b)'* (a + b)) - [1 0 0; 0 1 0; 0 0 1]
 end
 
-function force(ds, state::Array{Float64,2}, param, t)
+function force(ds, state::Array{Float64,1}, param, t)
     # unpack state variables
-    pos = state[1:3, 2:end]
-    theta = state[4, 2:end-1]
-    u0 = state[1:3, 1]
+    n = param[1]
+    pos = reshape(state[4:3*(n+1)], (3, n))
+    theta = state[3*n+4:end]
+    u0 = state[1:3]
     # define fucntions for energy/gradient
     Ex = x -> energy_clean(x, theta, u0, param)
     Et = t -> energy_clean(pos, t, u0, param)
@@ -274,10 +278,10 @@ g(u, p, t) = 0.0  # noise function
 
 tspan = (0.0, 3.0)
 param = [3, 1]
-N = 3
+N = 4
 l0 = 1
 param = [N, l0]  #parameter vector
-pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0], (2, 1))
+pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0; 4.0 1.0 2.0], (2,1))
 
 #straight line
 #pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 0.0], (2, 1))
@@ -287,7 +291,7 @@ println(pos_0)
 
 #pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
 
-theta_0 = [0.0, 0.0]
+theta_0 = [0.0, 0.0, 0.0]
 u_0 = [1.0, 0.0, 0.0]
 
 state_0 = vars2state(pos_0, theta_0, u_0)
@@ -299,6 +303,7 @@ state_0 = vars2state(pos_0, theta_0, u_0)
 MassMatrix =
     diagm(vcat(ones(Float64, 3), ones(Float64, 3 * N), zeros(Float64, N - 1)))
 
+# state vetor: [u0x, u0y, u0z, X1x, X1y, X1z, X2x, ..., Xny, Xnz, theta1, .... theta(n-1)]
 
 
 Ex = x -> energy_clean(x, theta_0, u_0, param)
@@ -307,9 +312,19 @@ Et = t -> energy_clean(pos_0, t, u_0, param)
 fx = -1.0 * Flux.gradient(Ex, pos_0)[1]
 ft = -1.0 * Flux.gradient(Et, theta_0)[1]
 
-# prob = ODEProblem(force, state_0, tspan, param)
-# sol = solve(prob, Tsit5(), reltol=1e-8, abstol=1e-8)
+prob = ODEProblem(force, state_0, tspan, param)
+sol = solve(prob, Tsit5(), reltol=1e-8, abstol=1e-8)
 
-# times = sol.t
+times = sol.t
+l_times = length(times)
+u0t = Dict{Integer, Array{Float64,1}}()
+Xt = Dict{Integer, Array{Float64,2}}()
+theta_t = Dict{Integer, Array{Float64,1}}()
+for i = 1:length(times)
+    u0t[i], Xt[i], theta_t[i] = state2vars(sol.u[i], N)
+end
+
+
+
 # #plot(times, sol(times)[1:3,3])
 # plot(sol.u)
