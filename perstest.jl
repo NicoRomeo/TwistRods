@@ -211,7 +211,7 @@ function energy_clean(
     m2 = -sin(theta[1]) * u + cos(theta[1]) * v
     Ebend = 0.0
     # Etwist = 0.0, I believe this is incorrect
-    Etwist = m[n-1]^2 / ell
+    Etwist = 0.5 * m[n-1]^2 / ell
 
     s = edges'edges - l0
     Estretch = s's
@@ -240,7 +240,7 @@ function energy_clean(
         k = 0.5 * [dot(kb, m2 + m2_1), -dot(kb, m1 + m1_1)]
 
         Ebend += k' * B * k / ell
-        Etwist += m[i] ^ 2 / ell
+        Etwist += 0.5 * m[i] ^ 2 / ell
         s = edges_1'edges_1 .- l0
         Estretch += s*s
         # update for next vertex
@@ -410,7 +410,7 @@ energy_tot = plot()
 
 function en(rad)
     X = [0 1 2; 0 0 0; 0 0 0]
-    energy = energy_clean(X,[0,rad,rad],[1.;0.;0.],[3,1])
+    energy = energy_clean(X,[0,rad,rad],[0.;1.;0.],[3,1])
     return energy
 end #function
 
@@ -452,7 +452,7 @@ end #function
 #note the OFF-BY-ONE error
 println("num of vertices")
 println(vertices)
-en_hand(theta) = 0.5 * theta^2 * (vertices) * 2
+en_hand(theta) = 0.5 * theta^2 * (vertices)
 
 # plot!(en,10^-6,pi,xaxis=:log, yaxis=:log)
 plot!(en,10^-6,pi)
