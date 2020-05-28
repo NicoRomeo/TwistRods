@@ -179,6 +179,8 @@ function energy_clean(
     l0 = p[2]
     B = [1 0; 0 1]
 
+    #fix β, used in twist calculations (see notes)
+    β = 1
     # edges, tangent, kb, phi
 
     edges = X[:,2] - X[:,1]
@@ -187,10 +189,19 @@ function energy_clean(
 
     tangent = normd(edges)
     ell = 0.5 * sqrt(edges'edges)
+    println("this is ell")
+    println(ell)
 
+    # m = zeros(Float64, n - 1)
+    # print(m)
     m = diff(theta, dims = 1) #Dict(i => theta[i+1] - theta[i] for i in 1:n-1)
-    # println("this is m")
-    # println(m)
+    # for i = 1:n-1
+    #     m[i] = theta[i+1] - theta[i]
+    # end #for loop
+
+    println("this is m")
+    println(m)
+    println(size(m))
     u = normd(u0)
     # println("this is u, tangent")
     # println(u, tangent)
@@ -199,7 +210,9 @@ function energy_clean(
     m1 = cos(theta[1]) * u + sin(theta[1]) * v
     m2 = -sin(theta[1]) * u + cos(theta[1]) * v
     Ebend = 0.0
-    Etwist = 0.0
+    # Etwist = 0.0, I believe this is incorrect
+    Etwist = m[n-1]^2 / ell
+
     s = edges'edges - l0
     Estretch = s's
     for i = 1:(n-2)
@@ -207,8 +220,8 @@ function energy_clean(
         tangent_1 = normd(edges_1)
         kb = 2 .* cross(tangent, tangent_1) / (1 + tangent'tangent_1)
 
-        println("this is kb")
-        println(kb)
+        # println("this is kb")
+        # println(kb)
 
         kbn = sqrt(kb'kb)
         ell = 0.5 * (sqrt(edges'edges) + sqrt(edges_1'edges_1))
@@ -227,7 +240,7 @@ function energy_clean(
         k = 0.5 * [dot(kb, m2 + m2_1), -dot(kb, m1 + m1_1)]
 
         Ebend += k' * B * k / ell
-        Etwist += m[i] .^ 2 / ell
+        Etwist += m[i] ^ 2 / ell
         s = edges_1'edges_1 .- l0
         Estretch += s*s
         # update for next vertex
@@ -419,14 +432,31 @@ energy_tot = plot()
 # en(theta) = energy_clean([0. 1. 1+cos(theta);
 #         0. 0. sin(theta);0. 0. 0.],[0.,pi/6,0.],[0.;1.;0.],[3,1])
 
-function en(rad)
-    X = [0 1 2 3 4; 0 0 0 0 0; 0 0 0 0 0]
-    energy = energy_clean(X,[0,rad,rad*2,rad*3,rad*4],[1.;0.;0.],[5,1])
+# vertices = 8
+# function en(theta)
+#     X = [0 1 2 3 4 5 6 7; 0 0 0 0 0 0 0 0; 0 0 0 0 0 0 0 0]
+#     energy = energy_clean(X,[0,theta,theta*2, theta*3, theta * 4, theta*5, theta*6, theta*7],
+#                             [0.;1.;0.],[8,1])
+#     return energy
+# end #function
+
+vertices = 7
+function en(theta)
+    X = [0 1 2 3 4 5 6; 0 0 0 0 0 0 0; 0 0 0 0 0 0 0]
+    energy = energy_clean(X,[0,theta,theta*2, theta*3, theta * 4, theta*5, theta*6],
+                            [0.;1.;0.],[7,1])
     return energy
 end #function
 
+#twist throughout
+#note the OFF-BY-ONE error
+println("num of vertices")
+println(vertices)
+en_hand(theta) = 0.5 * theta^2 * (vertices) * 2
+
 # plot!(en,10^-6,pi,xaxis=:log, yaxis=:log)
 plot!(en,10^-6,pi)
+plot!(en_hand,10^-6,pi,label = "hand")
 xlabel!("Angle of twist (rad)")
 ylabel!("Energy")
 title!("3: Angle twist in straight rod vs. energy")
