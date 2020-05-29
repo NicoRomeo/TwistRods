@@ -15,10 +15,15 @@ using Plots
 #pos = zeros(4, n)
 #pos = rand(4, n)
 
-function initialize()
+"""
+    skewmat(a::Array{Float64})
 
+Returns the skew-symmetric matrix such as for a and b 3-vectors, cross(a,b) = skewmat(a) * b
 
-end # func
+"""
+function skewmat(a::Array{Float64})
+    return [0 -a[3] a[2]; a[3] 0 -a[1]; -a[2] a[1] 0]
+end # function
 
 function normd(x)
     return x / sqrt(x'x)
@@ -228,12 +233,12 @@ function energy_clean(
 end # function
 
 
-function state2vars(state::Array{Float64,2})
-    x = state[1:3, 2:end]
-    theta = state[4, 2:end-1]
-    u0 = state[1:3, 1]
-    return (x, theta, u0)
-end
+# function state2vars(state::Array{Float64,2})
+#     x = state[1:3, 2:end]
+#     theta = state[4, 2:end-1]
+#     u0 = state[1:3, 1]
+#     return (x, theta, u0)
+# end
 
 function vars2state(
     x::Array{Float64},
@@ -247,7 +252,7 @@ function state2vars(state::Array{Float64,1}, n::Integer)
     pos = reshape(state[4:3*(n+1)], (3, n))
     theta = state[3*n+4:end]
     u0 = state[1:3]
-    return (u0, pos, theta)
+    return (pos, theta, u0)
 end
 
 function rotatea2b(a::Array{Float64,1}, b::Array{Float64,1})
@@ -274,6 +279,7 @@ function force(ds, state::Array{Float64,1}, param, t)
 end
 
 
+function test_newrod()
 g(u, p, t) = 0.0  # noise function
 
 tspan = (0.0, 3.0)
@@ -324,6 +330,7 @@ for i = 1:length(times)
     u0t[i], Xt[i], theta_t[i] = state2vars(sol.u[i], N)
 end
 
+end
 
 
 # #plot(times, sol(times)[1:3,3])
