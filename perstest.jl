@@ -46,8 +46,8 @@ function energy(X, theta, u0, p, t)
         phi[i] = 2 * atan(norm(kb[:, i]) / 2)
     end
 
-    println("this is kb:")
-    println(kb)
+    # println("this is kb:")
+    # println(kb)
 
     # Bishop frame
     u = zeros(Float64, (3, n - 1))
@@ -189,8 +189,8 @@ function energy_clean(
 
     tangent = normd(edges)
     ell = 0.5 * sqrt(edges'edges)
-    println("this is ell")
-    println(ell)
+    # println("this is ell")
+    # println(ell)
 
     # m = zeros(Float64, n - 1)
     # print(m)
@@ -199,9 +199,9 @@ function energy_clean(
     #     m[i] = theta[i+1] - theta[i]
     # end #for loop
 
-    println("this is m")
-    println(m)
-    println(size(m))
+    # println("this is m")
+    # println(m)
+    # println(size(m))
     u = normd(u0)
     # println("this is u, tangent")
     # println(u, tangent)
@@ -211,7 +211,7 @@ function energy_clean(
     m2 = -sin(theta[1]) * u + cos(theta[1]) * v
     Ebend = 0.0
     # Etwist = 0.0, I believe this is incorrect
-    Etwist = 0.5 * m[n-1]^2 / ell
+    Etwist = m[n-1]^2 / ell
 
     s = edges'edges - l0
     Estretch = s's
@@ -240,7 +240,7 @@ function energy_clean(
         k = 0.5 * [dot(kb, m2 + m2_1), -dot(kb, m1 + m1_1)]
 
         Ebend += k' * B * k / ell
-        Etwist += 0.5 * m[i] ^ 2 / ell
+        Etwist += m[i] ^ 2 / ell
         s = edges_1'edges_1 .- l0
         Estretch += s*s
         # update for next vertex
@@ -251,6 +251,7 @@ function energy_clean(
     end
     Ebend = 0.5 * Ebend
     Estretch = 0.5 * Estretch
+    Etwist = 0.5 * Etwist
     # println("Below are twist and bend")
     # println(Etwist)
     # println(Ebend)
@@ -355,6 +356,38 @@ println(fx,ft)
 
 println("this is bend Energy, bent 90°")
 println(Ex(p0))
+
+"""
+TESTING FLUX.GRADIENT, SERIES
+"""
+
+println("%%%%%%%%%%%%%%%%%%%%%% FLUX GRADIENT, SERIES%%%%%%%%%%%%%%%%%%%%%%%%%")
+
+#everything in radians
+
+function force_b(ϕ, theta, norm, param)
+
+    p0 = [0 1 1+cos(ϕ); 0 0 sin(ϕ); 0 0 0]
+
+    Ex = x -> energy_clean(x, theta,norm, param)
+    fx = -1.0 * Flux.gradient(Ex, p0)[1]
+
+    f_12 = -4*(sin(ϕ)/(1 + cos(ϕ))^2)
+    f_11 = -(sin(ϕ)/(1 + cos(ϕ)))^2
+    f_13 = 0
+
+    return [f_11,f_12,f_13],fx[:,1]
+end #function
+
+println("this is hand calc vs. fx, bent ϕ_1")
+
+for i = 1:90
+
+    println(force_b(i * pi/180, [0.,0.,0.], [0.,1.,0.],[3,1]))
+
+end #for
+
+
 
 """
 GRAPH 2: Smaller  ==> bigger loops
