@@ -42,7 +42,7 @@ function energy_q(
     m2 = -sin(theta[1]) * u + cos(theta[1]) * v
     Ebend = 0.0
     Etwist = 0.0
-    s = edges'edges - l0
+    s = sqrt(edges'edges) - l0
     Estretch = s's
     for i = 1:(n-2)
         edges_1 = X[:, i+2] - X[:, i+1]
@@ -50,9 +50,10 @@ function energy_q(
         kb = 2 .* cross(tangent, tangent_1) / (1 + tangent'tangent_1)
         kbn = sqrt(kb'kb)
         ell = 0.5 * (sqrt(edges'edges) + sqrt(edges_1'edges_1))
-        phi = 2 * atan(kbn / 2)
 
         if !isapprox(kbn, 0.0)
+
+            phi = 2 * atan(dot(kb, kb/kbn) / 2)
             ax = kb / kbn
             u =
                 dot(ax, u) * ax +
@@ -66,7 +67,7 @@ function energy_q(
 
         Ebend += k' * B * k / ell
         Etwist += m[i] .^ 2 / ell
-        s = edges_1'edges_1 .- l0
+        s = sqrt(edges_1'edges_1) .- l0
         Estretch += s*s
         # update for next vertex
         edges = edges_1
@@ -79,7 +80,7 @@ function energy_q(
     Ebend = 0.5 * Ebend
     Estretch = 0.5 * Estretch
     Etwist = 0.5 * Etwist
-    return Ebend + Etwist + Estretch
+    return Ebend #+ Etwist + 5*Estretch
 end # function
 
 function skewmat(a::Array{Float64})
@@ -194,6 +195,46 @@ function main()
     end
     display(plt)
     png("test_rod_twist")
+
+
+    X = zeros(Float64,3,10)
+    for i = 1:10
+        X[1,i] = 10 * cos(-2.0*pi*(i-1)/10)
+        X[2,i] = 10 * sin(-2.0*pi*(i-1)/10)
+    end #for loop
+    N = 10
+    theta_0 = zeros(Float64, N)
+    u_0 = [1.0, 0.0, 0.0]
+    state_0 = vars2state(X, theta_0, u_0)
+
+    tspan = (0.0, 10000.0)
+    n_t = 500
+    dt = (tspan[2] - tspan[1]) / n_t
+
+    f = zeros(Float64, 4*N)
+
+    plt = plot()
+    state = state_0[:]
+    x_cur = reshape(state[4:3*(N+1)], (3, N))
+    x_1 = x_cur[1, :]
+    x_2 = x_cur[2, :]
+    scatter!(plt, x_1, x_2, label = legend = false)
+    plot!(plt, x_1, x_2, label = legend = false)
+
+    display(plt)
+
+    for i = 1:n_t
+        state = timestep(F!, f, state, dt, param, i)
+        if i%100 == 0
+            x_cur = reshape(state[4:3*(N+1)], (3, N))
+            x_1 = x_cur[1, :]
+            x_2 = x_cur[2, :]
+            scatter!(plt, x_1, x_2, legend = false)
+            plot!(plt, x_1, x_2, legend = false)
+        end
+    end
+    display(plt)
+    png("test_circle_1")
     # scene = Scene()
     #
     # state = state_0[:]
