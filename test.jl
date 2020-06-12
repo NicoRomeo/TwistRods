@@ -17,20 +17,18 @@ include("newrod.jl")
 # function vars2state(x::Array{Float64},theta::Array{Float64},u0::Array{Float64})
 ##
 
-function energy_q(
-    q,
-    u0::Array{Float64,1},
-    p
-)
+function energy_q(q, u0::Array{Float64,1}, p)
     n = p[1]
     l0 = p[2]
     B = [1 0; 0 1]
 
     # edges, tangent, kb, phi
-    X = reshape(q[1:3*n], (3,n))
+    #X = reshape(q[1:3*n], (3,n))
+    X = q[1:3*n]
     theta = q[3*n+1:end]
 
-    edges = X[:, 2] - X[:, 1]
+    #edges = X[:, 2] - X[:, 1]
+    edges = q[4:6] - q[1:3]
     tangent = normd(edges)
     ell = 0.5 * sqrt(edges'edges)
 
@@ -44,16 +42,17 @@ function energy_q(
     Etwist = 0.0
     s = sqrt(edges'edges) - l0
     Estretch = s's
-    for i = 1:(n-2)
-        edges_1 = X[:, i+2] - X[:, i+1]
+    i= 1
+    while i < n - 1
+    #for i = 1:(n-2)
+        #edges_1 = X[:, i+2] - X[:, i+1]
+        edges_1 = q[3*(i+1)+1:3*(i+2)] - q[3*i+1:3*(i+1)]
         tangent_1 = normd(edges_1)
         kb = 2 .* cross(tangent, tangent_1) / (1 + tangent'tangent_1)
         kbn = sqrt(kb'kb)
         ell = 0.5 * (sqrt(edges'edges) + sqrt(edges_1'edges_1))
-
         if !isapprox(kbn, 0.0)
-
-            phi = 2 * atan(dot(kb, kb/kbn) / 2)
+            phi = 2 * atan(dot(kb, kb / kbn) / 2)
             ax = kb / kbn
             u =
                 dot(ax, u) * ax +
@@ -68,20 +67,91 @@ function energy_q(
         Ebend += k' * B * k / ell
         Etwist += m[i] .^ 2 / ell
         s = sqrt(edges_1'edges_1) .- l0
-        Estretch += s*s
+        Estretch += s * s
         # update for next vertex
         edges = edges_1
         tangent = tangent_1
         m1 = m1_1
         m2 = m2_1
+        i += 1
     end
     ell = 0.5 * sqrt(edges'edges)
     Etwist += m[end] .^ 2 / ell
     Ebend = 0.5 * Ebend
     Estretch = 0.5 * Estretch
     Etwist = 0.5 * Etwist
-    return Ebend #+ Etwist + 5*Estretch
+    return Ebend #+ 0.001*Estretch #+ Etwist
 end # function
+
+function energy_timep(q, u, p)
+    n = p[1]
+    l0 = p[2]
+    B = [1 0; 0 1]
+
+    # edges, tangent, kb, phi
+    #X = reshape(q[1:3*n], (3,n))
+    X = q[1:3*n]
+    theta = q[3*n+1:end]
+
+    #edges = X[:, 2] - X[:, 1]
+    edges = q[4:6] - q[1:3]
+    tangent = normd(edges)
+    ell = 0.5 * sqrt(edges'edges)
+
+    m = diff(theta, dims = 1) #Dict(i => theta[i+1] - theta[i] for i in 1:n-1)
+
+    #u = normd(u0)
+    v = cross(tangent, u[1:3])
+    m1 = cos(theta[1]) * u[1:3] + sin(theta[1]) * v
+    m2 = -sin(theta[1]) * u[1:3] + cos(theta[1]) * v
+    Ebend = 0.0
+    Etwist = 0.0
+    s = sqrt(edges'edges) - l0
+    Estretch = s's
+    # inner points
+    #i = 2
+    #while i < n
+    for i = 2:(n-1)
+        #edges_1 = X[:, i+2] - X[:, i+1]
+        edges_1 = q[3*i+1:3*(i+1)] - q[3*(i-1)+1:3*i]
+
+        tangent_1 = normd(edges_1)
+        kb = 2 .* cross(tangent, tangent_1) / (1 + tangent'tangent_1)
+        kbn = sqrt(kb'kb)
+        ell = 0.5 * (sqrt(edges'edges) + sqrt(edges_1'edges_1))
+        u = if !isapprox(kbn, 0.0)
+
+            phi = 2 * atan(dot(kb, kb / kbn) / 2)
+            ax = kb / kbn
+            u =
+                dot(ax, u) * ax +
+                cos(phi) * cross(cross(ax, u), ax) +
+                sin(phi) * cross(ax, u)
+        end
+        v = cross(tangent_1, u[3*i+1:3*(i+1)])
+        m1_1 = cos(theta[i+1]) * u[3*i+1:3*(i+1)] + sin(theta[i+1]) * v
+        m2_1 = -sin(theta[i+1]) * u[3*i+1:3*(i+1)] + cos(theta[i+1]) * v
+        k = 0.5 * [dot(kb, m2 + m2_1), -dot(kb, m1 + m1_1)]
+
+        Ebend += k' * B * k / ell
+        Etwist += m[i] .^ 2 / ell
+        s = sqrt(edges_1'edges_1) .- l0
+        Estretch += s * s
+        # update for next vertex
+        edges = edges_1
+        tangent = tangent_1
+        m1 = m1_1
+        m2 = m2_1
+    end
+    #final point
+    ell = 0.5 * sqrt(edges'edges)
+    Etwist += m[end] .^ 2 / ell
+    Ebend = 0.5 * Ebend
+    Estretch = 0.5 * Estretch
+    Etwist = 0.5 * Etwist
+    return Ebend + Etwist + 3 * Estretch
+
+end
 
 function skewmat(a::Array{Float64})
     return [0 -a[3] a[2]; a[3] 0 -a[1]; -a[2] a[1] 0]
@@ -90,12 +160,12 @@ end # function
 """
     rotab(a, b, c)
 
-rotation matrix sending unit vectors a to b, aplied to c
+rotation matrix sending unit vectors a to b, applied to c
 """
 function rotab(a::Array{Float64,1}, b::Array{Float64,1}, c::Array{Float64,1})
-    axb  = cross(a,b)
+    axb = cross(a, b)
     V = skewmat(axb)
-    u = c + cross(axb, c) + V^2 * c/(1+dot(a,b))
+    u = c + cross(axb, c) + V*V * c / (1 + dot(a, b))
     return u
 end # function
 
@@ -109,7 +179,7 @@ end # function
 
 function F!(f::Array{Float64,1}, q::Array{Float64,1}, u0, param)
     E = mu -> energy_q(mu, u0, param)
-    f[:] = - 1.0 * Zygote.gradient(E, q)[1]
+    f[:] = -1.0 * Zygote.gradient(E, q)[1]
 end
 
 
@@ -120,7 +190,14 @@ function that runs a single timestep using a RK2 time step.
     args: F force function
     state
 """
-function timestep(F!, f::Array{Float64,1}, state::Array{Float64,1}, dt::Float64, param, t)
+function timestep(
+    F!,
+    f::Array{Float64,1},
+    state::Array{Float64,1},
+    dt::Float64,
+    param,
+    t,
+)
     # unpack state
     n = param[1]
     x, theta, u0 = state2vars(state, n)
@@ -130,7 +207,7 @@ function timestep(F!, f::Array{Float64,1}, state::Array{Float64,1}, dt::Float64,
 
     F!(f, q_i, u0, param)
 
-    q_g  = (dt/2) * f + q_i
+    q_g = (dt / 2) * f + q_i
     e1 = LinearAlgebra.normalize!(q_g[4:6] - q_g[1:3])
     u1 = rotab(tangent0, e1, u0)
 
@@ -156,8 +233,11 @@ function main()
     N = 3
     l0 = 1
     param = [N, l0]  #parameter vector
-    pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0; 4.0 1.0 2.0], (2,1))
-    pos_0 = permutedims([1. 0. 0.;0. 0. 0.;0. 1. 0.], (2,1))
+    pos_0 = permutedims(
+        [0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0; 4.0 1.0 2.0],
+        (2, 1),
+    )
+    pos_0 = permutedims([1.0 0.0 0.0; 0.0 0.0 0.0; 0.0 1.0 0.0], (2, 1))
 
     #straight line
     #pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 0.0], (2, 1))
@@ -168,14 +248,21 @@ function main()
     #pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
 
     theta_0 = [0.0, 1.0, 2.0]
-    u_0 = [0., 1.0, 0.0]
+    u_0 = [0.0, 0.0, 1.0]
 
     state_0 = vars2state(pos_0, theta_0, u_0)
 
-    f = zeros(Float64, 4*N)
+    println("state 0")
+    println(state_0)
+    x, theta, u_0 = state2vars(state_0, N)
+    println("x, theta, u_0")
+    println(x)
+    println(theta)
+    println(u_0)
 
-    plt = plot(1, xlim = (-1, 2),
-            ylim = (-1, 2))
+    f = zeros(Float64, 4 * N)
+
+    plt = plot(1, xlim = (-1, 2), ylim = (-1, 2))
     state = state_0[:]
     x_cur = reshape(state[4:3*(N+1)], (3, N))
     x_1 = x_cur[1, :]
@@ -193,25 +280,33 @@ function main()
         scatter!(plt, x_1, x_2, legend = false)
         plot!(plt, x_1, x_2, legend = false)
     end
+    println("check sum ", isapprox(sum(f), 0.0))
+    println("sum(f) = ", sum(f))
     display(plt)
+
+    println("u =", state[1:3] )
     png("test_rod_twist")
 
 
-    X = zeros(Float64,3,10)
+    X = zeros(Float64, 3, 10)
     for i = 1:10
-        X[1,i] = 10 * cos(-2.0*pi*(i-1)/10)
-        X[2,i] = 10 * sin(-2.0*pi*(i-1)/10)
+        X[1, i] = 10 * cos(-2.0 * pi * (i - 1) / 10)
+        X[2, i] = 10 * sin(-2.0 * pi * (i - 1) / 10)
     end #for loop
     N = 10
+    param = [N, l0]
     theta_0 = zeros(Float64, N)
-    u_0 = [1.0, 0.0, 0.0]
+    e_0 = normalize(X[:, 2] - X[:, 1])
+    println("e_0 norm ", e_0'e_0 )
+    #u_0 = [e_0[2], -e_0[1], 0.0]
+    u_0 = [0., 0., 1.]
     state_0 = vars2state(X, theta_0, u_0)
 
-    tspan = (0.0, 10000.0)
-    n_t = 500
+    tspan = (0.0, 1000.0)
+    n_t = 101
     dt = (tspan[2] - tspan[1]) / n_t
 
-    f = zeros(Float64, 4*N)
+    f = zeros(Float64, 4 * N)
 
     plt = plot()
     state = state_0[:]
@@ -225,7 +320,7 @@ function main()
 
     for i = 1:n_t
         state = timestep(F!, f, state, dt, param, i)
-        if i%100 == 0
+        if i % 100 == 0
             x_cur = reshape(state[4:3*(N+1)], (3, N))
             x_1 = x_cur[1, :]
             x_2 = x_cur[2, :]
@@ -233,6 +328,8 @@ function main()
             plot!(plt, x_1, x_2, legend = false)
         end
     end
+    println("check sum ", isapprox(sum(f), 0.0))
+    println("sum(f) = ", sum(f))
     display(plt)
     png("test_circle_1")
     # scene = Scene()
