@@ -18,7 +18,7 @@ include("newrod.jl")
 ##
 
 function energy_q(q, u0::Array{Float64,1}, p)
-    n = p[1]
+    n = Int(p[1])
     l0 = p[2]
     B = [1 0; 0 1]
 
@@ -80,11 +80,11 @@ function energy_q(q, u0::Array{Float64,1}, p)
     Ebend = 0.5 * Ebend
     Estretch = 0.5 * Estretch
     Etwist = 0.5 * Etwist
-    return Ebend #+ 0.001*Estretch #+ Etwist
+    return Ebend + Etwist #+ Estretch
 end # function
 
 function energy_timep(q, u, p)
-    n = p[1]
+    n = Int(p[1])
     l0 = p[2]
     B = [1 0; 0 1]
 
@@ -199,12 +199,14 @@ function timestep(
     t,
 )
     # unpack state
-    n = param[1]
+    n = Int(param[1])
     x, theta, u0 = state2vars(state, n)
     q_i = vcat(vec(x), theta)
     tangent0 = LinearAlgebra.normalize!(q_i[4:6] - q_i[1:3])
+
     # Compute explicit initial guess for X, theta at t+dt
 
+    #RK 2
     F!(f, q_i, u0, param)
 
     q_g = (dt / 2) * f + q_i
@@ -217,17 +219,126 @@ function timestep(
     e1 = LinearAlgebra.normalize!(q[4:6] - q[1:3])
     u1 = rotab(tangent0, e1, u0)
 
+    #RK4
+    q0 = vcat(vec(x), theta)
+    tan0 = LinearAlgebra.normalize!(q0[4:6] - q0[1:3])
+
+    F!(f, q0, u0, param)
+    k1 = f
+    q1 = (dt / 2) * f + q0
+    e1 = LinearAlgebra.normalize!(q1[4:6] - q1[1:3])
+    # u1 = rotab(tangent0, e1, u0)
+
+    F!(f, q1, u1, param)
+    k2 = f
+    q2 = (dt / 2) * f + q1
+    e2 = LinearAlgebra.normalize!(q2[4:6] - q2[1:3])
+    u2 = rotab(tangent0, e2, u0)
+
+    F!(f, q2, u2, param)
+    k3 = f
+    q3 = (dt / 2) * f + q2
+    e3 = LinearAlgebra.normalize!(q3[4:6] - q3[1:3])
+    u3 = rotab(tangent0, e3, u0)
+
+    F!(f, q3, u3, param)
+    k4 = f
+    q4 = (dt) * f + q3
+    e4 = LinearAlgebra.normalize!(q4[4:6] - q4[1:3])
+    u4 = rotab(tangent0, e4, u0)
+
+    x_fin = q_i + (1/6 * dt * (k1 + 2k2 + 2k3 + k4))
+    e_fin = LinearAlgebra.normalize!(x_fin[4:6] - x_fin[1:3])
+    u_fin = rotab(tangent0, e_fin, u0)
+
     # package things use, and return the new state
-    return vcat(u0, q)
+    return vcat(u_fin, x_fin) #vcat(u4, q4),
 
 end # function
 
 
-
-
 function main()
-    tspan = (0.0, 3.0)
-    n_t = 200
+    println("%%%%%%%%%%%%%%%%%%% Twist, straight %%%%%%%%%%%%%%%%%%%")
+
+    tspan = (0.0, 5.0)
+    n_t = 5000
+    dt = (tspan[2] - tspan[1]) / n_t
+    #param = [3, 1]
+    N = 5
+    l0 = 1
+    param = [N, l0]  #parameter vector
+    pos_0 = permutedims(
+        [0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0; 4.0 1.0 2.0],
+        (2, 1),
+    )
+    pos_0 = permutedims([0.0 0.0 0.0; 1.0 0.0 0.0; 2.0 0.0 0.0;
+                        3.0 0.0 0.0; 4.0 0.0 0.0], (2, 1))
+
+    pos_0 = permutedims([0.0 0.0 0.0; 1.0 0.0 0.0; 2.0 0.0 0.0;
+                        3.0 0.0 0.0; 4.0 0.0 0.0], (2, 1))
+
+    #straight line
+    #pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 0.0], (2, 1))
+
+    println("this is pos_0: ")
+    println(pos_0)
+
+    #pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
+
+    theta_0 = [0., 1.0, 2.0, 3., 4.]
+    # theta_0 = [0.0, 0.0, 0.0]
+    u_0 = [0.0, 1.0, 0.0]
+    # u_0 = [0.0, 0.0, 1.0]
+    # u_0 = [0.0, 1/sqrt(2), 1/sqrt(2)]
+
+    state_0 = vars2state(pos_0, theta_0, u_0)
+
+    println("state 0")
+    println(state_0)
+    x, theta, u_0 = state2vars(state_0, N)
+    println("x, theta, u_0")
+    println(x)
+    println(theta)
+    println(u_0)
+
+    f = zeros(Float64, 4 * N)
+
+    plt = plot(1, xlim = (-1, 5), ylim = (-1, 5))
+    state = state_0[:]
+    x_cur = reshape(state[4:3*(N+1)], (3, N))
+    x_1 = x_cur[1, :]
+    x_2 = x_cur[2, :]
+    scatter!(plt, x_1, x_2, label = legend = false)
+    plot!(plt, x_1, x_2, label = legend = false, aspect_ratio=:equal)
+
+    display(plt)
+
+    for i = 1:n_t
+        state = timestep(F!, f, state, dt, param, i)
+
+        x_cur = reshape(state[4:3*(N+1)], (3, N))
+        # println("theta =", state[3N+4:end])
+
+        x_1 = x_cur[1, :]
+        x_2 = x_cur[2, :]
+        scatter!(plt, x_1, x_2, legend = false)
+        plot!(plt, x_1, x_2, legend = false,
+                aspect_ratio=:equal, title = "Straight rod with uniform twist")
+    end
+
+    println(f)
+    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
+    println("sum(f) = ", sum(f))
+    display(plt)
+
+    println("u =", state[1:3])
+
+    png("test_rod_twist_straight")
+
+    println("%%%%%%%%%%%%%%%%%%% bend w/o twist %%%%%%%%%%%%%%%%%%%")
+
+    tspan = (0.0, 10.0)
+    n_t = 1000
     dt = (tspan[2] - tspan[1]) / n_t
     #param = [3, 1]
     N = 3
@@ -247,8 +358,10 @@ function main()
 
     #pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
 
-    theta_0 = [0.0, 1.0, 2.0]
+    theta_0 = [0.0, 0.0, 0.0]
+    # theta_0 = [0.0, 0.0, 0.0]
     u_0 = [0.0, 0.0, 1.0]
+    u_0 = [0.0, 0.0, -1.0]
 
     state_0 = vars2state(pos_0, theta_0, u_0)
 
@@ -268,25 +381,107 @@ function main()
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
     scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, label = legend = false)
+    plot!(plt, x_1, x_2, label = legend = false, aspect_ratio=:equal)
 
     display(plt)
 
     for i = 1:n_t
         state = timestep(F!, f, state, dt, param, i)
+
         x_cur = reshape(state[4:3*(N+1)], (3, N))
+        println("theta =", state[3N+4:end])
+
         x_1 = x_cur[1, :]
         x_2 = x_cur[2, :]
         scatter!(plt, x_1, x_2, legend = false)
-        plot!(plt, x_1, x_2, legend = false)
+        plot!(plt, x_1, x_2, legend = false,
+                aspect_ratio=:equal, title = "90° bend without twist")
     end
-    println("check sum ", isapprox(sum(f), 0.0))
+
+    println(f)
+    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
     println("sum(f) = ", sum(f))
     display(plt)
 
-    println("u =", state[1:3] )
-    png("test_rod_twist")
+    println("u =", state[1:3])
 
+    png("test_rod_bend_notwist")
+
+    println("%%%%%%%%%%%%%%%%%%% bend w/ twist %%%%%%%%%%%%%%%%%%%")
+
+    tspan = (0.0, 10.0)
+    n_t = 1000
+    dt = (tspan[2] - tspan[1]) / n_t
+    #param = [3, 1]
+    N = 3
+    l0 = 1
+    param = [N, l0]  #parameter vector
+    pos_0 = permutedims(
+        [0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0; 4.0 1.0 2.0],
+        (2, 1),
+    )
+    pos_0 = permutedims([1.0 0.0 0.0; 0.0 0.0 0.0; 0.0 1.0 0.0], (2, 1))
+    pos_0 = permutedims([0.0 1.0 0.0; 0.0 0.0 0.0; 1.0 0.0 0.0], (2, 1))
+
+    #straight line
+    #pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 0.0], (2, 1))
+
+    println("this is pos_0: ")
+    println(pos_0)
+
+    #pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
+
+    theta_0 = [0.0, 1., 2.]
+    # theta_0 = [0.0, 0.0, 0.0]
+    u_0 = [0.0, 0.0, 1.0]
+    u_0 = [0.0, 0.0, -1.0]
+
+    state_0 = vars2state(pos_0, theta_0, u_0)
+
+    println("state 0")
+    println(state_0)
+    x, theta, u_0 = state2vars(state_0, N)
+    println("x, theta, u_0")
+    println(x)
+    println(theta)
+    println(u_0)
+
+    f = zeros(Float64, 4 * N)
+
+    plt = plot(1, xlim = (-1, 2), ylim = (-1, 2))
+    state = state_0[:]
+    x_cur = reshape(state[4:3*(N+1)], (3, N))
+    x_1 = x_cur[1, :]
+    x_2 = x_cur[2, :]
+    scatter!(plt, x_1, x_2, label = legend = false)
+    plot!(plt, x_1, x_2, label = legend = false,
+            title = "", aspect_ratio=:equal)
+
+    display(plt)
+
+    for i = 1:n_t
+        state = timestep(F!, f, state, dt, param, i)
+
+        x_cur = reshape(state[4:3*(N+1)], (3, N))
+        # println("theta =", state[3N+4:end])
+
+        x_1 = x_cur[1, :]
+        x_2 = x_cur[2, :]
+        scatter!(plt, x_1, x_2, legend = false)
+        plot!(plt, x_1, x_2, aspect_ratio=:equal,
+            legend = false, title = "90° bend with twist")
+    end
+
+    println(f)
+    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
+    println("sum(f) = ", sum(f))
+    display(plt)
+
+    println("u =", state[1:3])
+
+    png("test_rod_bent_twist")
+
+    println("%%%%%%%%%%%%%%%%%%% Circle, no twist %%%%%%%%%%%%%%%%%%%")
 
     X = zeros(Float64, 3, 10)
     for i = 1:10
@@ -294,16 +489,31 @@ function main()
         X[2, i] = 10 * sin(-2.0 * pi * (i - 1) / 10)
     end #for loop
     N = 10
-    param = [N, l0]
+
+    rad = 10
+    #l0 = sqrt(2*rad^2*(1-cos(2*pi/10)))
+
     theta_0 = zeros(Float64, N)
     e_0 = normalize(X[:, 2] - X[:, 1])
+    l_i = X[:, 2] - X[:, 1]
+    l0 = sqrt(l_i[1]^2 + l_i[2]^2)
+    # l0 = 1
+    param = [N, l0]
+
     println("e_0 norm ", e_0'e_0 )
-    #u_0 = [e_0[2], -e_0[1], 0.0]
-    u_0 = [0., 0., 1.]
+
+    #change below ! fix
+    u_0 = [e_0[2], -e_0[1], 0.0]
+    # u_0 = [0., 0., 1.]
     state_0 = vars2state(X, theta_0, u_0)
 
-    tspan = (0.0, 1000.0)
-    n_t = 101
+    # tspan = (0.0, 500.0)
+    #BELOW:
+    # tspan = (0.0, 10^4 * 3)
+    # n_t = 10^4 * 3
+
+    tspan = (0.0, 10^3)
+    n_t = 10^3
     dt = (tspan[2] - tspan[1]) / n_t
 
     f = zeros(Float64, 4 * N)
@@ -314,24 +524,126 @@ function main()
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
     scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, label = legend = false)
+    plot!(plt, x_1, x_2, aspect_ratio=:equal, label = legend = false)
 
     display(plt)
 
     for i = 1:n_t
         state = timestep(F!, f, state, dt, param, i)
+
+        # println("this is state")
+        # println(state)
         if i % 100 == 0
             x_cur = reshape(state[4:3*(N+1)], (3, N))
+            # println("this is xcur")
+            # println(x_cur)
+
             x_1 = x_cur[1, :]
             x_2 = x_cur[2, :]
-            scatter!(plt, x_1, x_2, legend = false)
-            plot!(plt, x_1, x_2, legend = false)
+
+            # println("this is x_1, x_2")
+            # println(x_1, x_2)
+            # if x_1[1] != NaN && x_2[1] != NaN
+            #     scatter!(plt, x_1, x_2, legend = false)
+            # end #cond
+
+            plot!(plt, x_1, x_2, legend = false, aspect_ratio=:equal,
+                title = "Open circle without twist")
         end
+
+    # println("u =", state[1:3] )
     end
-    println("check sum ", isapprox(sum(f), 0.0))
+
+    println("this is f")
+    println(f)
+    #check below
+    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
     println("sum(f) = ", sum(f))
     display(plt)
     png("test_circle_1")
+
+    println("%%%%%%%%%%%%%%%%%%% Circle, twist %%%%%%%%%%%%%%%%%%%")
+    X = zeros(Float64, 3, 10)
+    for i = 1:10
+        X[1, i] = 10 * cos(-2.0 * pi * (i - 1) / 10)
+        X[2, i] = 10 * sin(-2.0 * pi * (i - 1) / 10)
+    end #for loop
+    N = 10
+
+    rad = 10
+    #l0 = sqrt(2*rad^2*(1-cos(2*pi/10)))
+
+    # theta_0 = zeros(Float64, N)
+    theta_0 = [0.,1.,2.,3.,4.,5.,6.,7.,8.,9.]
+    e_0 = normalize(X[:, 2] - X[:, 1])
+    l_i = X[:, 2] - X[:, 1]
+    l0 = sqrt(l_i[1]^2 + l_i[2]^2)
+    # l0 = 1
+    param = [N, l0]
+
+    println("e_0 norm ", e_0'e_0 )
+
+    #change below ! fix
+    u_0 = [e_0[2], -e_0[1], 0.0]
+    # u_0 = [0., 0., 1.]
+    state_0 = vars2state(X, theta_0, u_0)
+
+    # tspan = (0.0, 500.0)
+    #BELOW:
+    # tspan = (0.0, 10^4 * 3)
+    # n_t = 10^4 * 3
+
+    tspan = (0.0, 10^2)
+    n_t = 10^2
+    dt = (tspan[2] - tspan[1]) / n_t
+
+    f = zeros(Float64, 4 * N)
+
+    plt = plot()
+    state = state_0[:]
+    x_cur = reshape(state[4:3*(N+1)], (3, N))
+    x_1 = x_cur[1, :]
+    x_2 = x_cur[2, :]
+    scatter!(plt, x_1, x_2, label = legend = false)
+    plot!(plt, x_1, x_2, aspect_ratio=:equal, label = legend = false)
+
+    display(plt)
+
+    for i = 1:n_t
+        state = timestep(F!, f, state, dt, param, i)
+
+        # println("this is state")
+        # println(state)
+        if i % 100 == 0
+            x_cur = reshape(state[4:3*(N+1)], (3, N))
+            # println("this is xcur")
+            # println(x_cur)
+
+            x_1 = x_cur[1, :]
+            x_2 = x_cur[2, :]
+            println("theta =", state[3N+4:end])
+
+            # println("this is x_1, x_2")
+            # println(x_1, x_2)
+            # if x_1[1] != NaN && x_2[1] != NaN
+            #     scatter!(plt, x_1, x_2, legend = false)
+            # end #cond
+
+            plot!(plt, x_1, x_2, legend = false, aspect_ratio=:equal,
+                title = "Open circle with twist")
+        end
+
+    # println("u =", state[1:3] )
+    end
+
+    println("this is f")
+    println(f)
+    #check below
+    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
+    println("sum(f) = ", sum(f))
+    display(plt)
+    png("test_circle_2_twist")
+
     # scene = Scene()
     #
     # state = state_0[:]
@@ -351,8 +663,6 @@ function main()
     #     # lines!(scene, x_1, x_2)
     #     # scatter!(scene, x_1, x_2)
     # end every 5
-
-
 
 end
 
