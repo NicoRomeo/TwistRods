@@ -107,18 +107,33 @@ function F_impl( q::Array{Float64,1}, u, param, dt)
         tan_0 = LinearAlgebra.normalize!(q[3*i+1:3*(i+1)] - q[3*(i-1)+1:3*i])
         e_fin = LinearAlgebra.normalize!(q_n[3*i+1:3*(i+1)] - q_n[3*(i-1)+1:3*i])
         u_updated[3*(i-1)+1:3*i] = rotab(tangent0, e_fin, u[3*(i-1)+1:3*i])
+    end
     return -1.0 * Zygote.gradient(E, q)[1], u_updated
 
 end # function
 
+
+"""
+    update_frame(args)
+
+updates material frame
+"""
+function update_frame(q_i, q_f::Array{Float64,1}, u_i::Array{Float64,1}, param)
+    n = Int(param[1])
+    u_f = zeros(size(u_i))
+    for i = 1:(n-1)
+        tan_i = LinearAlgebra.normalize!(q_i[3*i+1:3*(i+1)] - q_i[3*(i-1)+1:3*i])
+        tan_f = LinearAlgebra.normalize!(q_f[3*i+1:3*(i+1)] - q_f[3*(i-1)+1:3*i])
+        u_f[3*(i-1)+1:3*i] = rotab(tan_i, tan_f, u_i[3*(i-1)+1:3*i])
+    end
+    return u_f
+end # function
 """
     timestep_impl(args)
 
 Implicit integrator to use with the time-parallel approach
 """
 function timestep_impl(
-    F,
-    f::Array{Float64,1},
     q::Array{Float64,1},
     u::Array{Float64,1},
     dt::Float64,
@@ -126,26 +141,27 @@ function timestep_impl(
     t,
 )
     n = Int(param[1])
-    tangent0 = LinearAlgebra.normalize!(q_i[4:6] - q_i[1:3])
+    gamma = param[2]
+    tangent0 = LinearAlgebra.normalize!(q[4:6] - q[1:3])
     #first guess by single Euler step
-    E = mu -> energy_q(mu, u, param)
+    E = mu -> energy_timep(mu, u, param)
     f = -1.0 * Zygote.gradient(E, q)[1]
     q_guess = q + dt* f
 
-    Res = zeros(q)
-    function impl!(R, q_t, gamma)  # gamma is viscosity parameter
-        E = mu -> energy_q(mu, u, param)
+    Res = zeros(size(q))
+    function impl!(R, q_t)  # gamma is viscosity parameter
+        E = mu -> energy_timep(mu, u, param)
         f = -1.0 * Zygote.gradient(E, q_t)[1]
-        return q_t - q_i + f/gamma
+        R[:] = q_t - q + f/gamma
     end # function
-    sres= nlsolve(impl!, q_guess)
-    #
-
-
+    sres= nlsolve(impl!, q_guess, autodiff = :forward)
+    q_f = sres.zero
+    u_f = update_frame(q, q_f, u, param)
+    return q_f, u_f
 
 end # function
 
-function test_impl()
+function main()
     tspan = (0.0, 10.0)
     n_t = 1000
     dt = (tspan[2] - tspan[1]) / n_t
@@ -167,8 +183,10 @@ function test_impl()
     u_01 = [0.0, 1.0, 0.0]
 
     u_0 = zeros(3*(N-1))
-    u_0[1:3] = u_0[:]
-    # create initial material frame
+    u_0[1:3] = u_01[:]
+    # create initial material frame by parallel transporting u_0
+    edges = q_0[4:6] - q_0[1:3]
+    tangent = normd(edges)
     for i = 1:(N-2)
         #edges_1 = X[:, i+2] - X[:, i+1]
         edges_1 = q_0[3*(i+1)+1:3*(i+2)] - q_0[3*i+1:3*(i+1)]
@@ -179,8 +197,23 @@ function test_impl()
         if !isapprox(kbn, 0.0)
             phi = 2 * atan(dot(kb, kb / kbn) / 2)
             ax = kb / kbn
-            u_0[3*(i+1)+1:3*(i+2)] =
-                dot(ax, u) * ax +
-                cos(phi) * cross(cross(ax, u), ax) +
-                sin(phi) * cross(ax, u)
+            u_0[3*i+1:3*(i+1)] =
+                dot(ax, u_0[3*(i-1)+1:3*i]) * ax +
+                cos(phi) * cross(cross(ax, u_0[3*(i-1)+1:3*i]), ax) +
+                sin(phi) * cross(ax, u_0[3*(i-1)+1:3*i])
         end
+        edges = edges_1
+        tangent = tangent_1
+    end
+
+    print(timestep_impl(
+        q_0,
+        u_0,
+        dt,
+        param,
+        1,
+    ))
+    print("complete\n")
+end
+
+@time main()
