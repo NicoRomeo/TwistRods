@@ -188,9 +188,9 @@ function timestep(
     e_fin = LinearAlgebra.normalize!(x_fin[4:6] - x_fin[1:3])
     u_fin = rotab(tangent0, e_fin, u0)
 
-    println("this is ufin, xfin pre-projection")
-    println(u_fin,x_fin)
-    println(size(u_fin))
+    # println("this is ufin, xfin pre-projection")
+    init = vcat(u_fin,x_fin)
+    # println(vcat(u_fin,x_fin))
 
     """
     PSEUDOCODE
@@ -216,12 +216,12 @@ function timestep(
     m_k = ℳ/n #assuming uniform rod
 
     x = reshape(x_fin[1:3n], (3,n)) #reshape x, twist last row
-    println("this is x")
-    println(x)
+    # println("this is x")
+    # println(x)
 
     theta_proj = x_fin[3n+1:end]
 
-    # edges = x[:, 2:end] - x[:, 1:end-1] #defining edges
+    edges = x[:, 2:end] - x[:, 1:end-1] #defining edges
 
     #mass matrix: uniform, lumped rod, CHECK THISß
     M = m_k * Matrix(1.0I, 3n, 3n)
@@ -236,9 +236,8 @@ function timestep(
     #initializing C as func
 
     function constraint(x_inp)
+        x_inp = reshape(x_inp,(3,n))
         edges = x_inp[:, 2:end] - x_inp[:, 1:end-1]
-        println("edges")
-        println(edges)
 
         C = zeros(n-1) #1 per edge
         undeformed_config = l0^2 #vor length, for now
@@ -249,9 +248,8 @@ function timestep(
             println(C[i])
         end #loop
 
-        println("this is C:", C)
-
-        return C
+        C_fin = vec(C)
+        return C_fin
     end #function
 
 
@@ -282,18 +280,36 @@ function timestep(
     C = constraint(x)
 
     while maximum(C) >= 10^-3
-        gradC = Zygote.gradient(constraint, x)[1]
+        #vectorize
+        x = vec(x)
+
+        #initializing gradC
+        gradC = zeros(n-1,3*n)
+
+        #calculating gradient
+        for r = 1:n-1
+            gradC[r, 3*(r-1)+1:3*(r-1)+3] = -2 * edges[:,r]
+            gradC[r, 3*(r-1)+4:3*(r-1)+6] = 2 * edges[:,r]
+        end #for
+
+        # gradC = Zygote.gradient(constraint, x)
+
+        #solving for lagrange multipliers
         println("gradC")
         println(gradC)
         gradC_t = transpose(gradC)
         G = gradC * M_inv * gradC_t
+
+        println("G", G)
+        #note: G is sparse. Not quite banded (note staggered rows)
         G_inv = inv(G) #check runtime
 
         δλ = G_inv * C
         δλ_next = δλ / dt^2
         δx_next = -dt^2 * (M_inv * gradC_t * δλ_next)
 
-        x_next_fp = shapex + δx_next
+        #x_next_fp is vec
+        x_next_fp = x + δx_next
         j += 1
 
         #_______________update_y/v__________________
@@ -307,7 +323,9 @@ function timestep(
         #______________re_init___________________
         #updating x, edges, C
         x = x_next_fp
-        edges = x[:, 2:end] - x[:, 1:end-1] #defining edges
+        x_arr = reshape(x,(3,n))
+
+        edges = x_arr[:, 2:end] - x_arr[:, 1:end-1] #defining edges
 
         #mass matrix: uniform, lumped rod
         M = m_k * Matrix(1.0I, 3n, 3n)
@@ -317,6 +335,7 @@ function timestep(
         #initializing C
         C = constraint(x)
         println("this is C:", C)
+        println("this is max C:", maximum(C))
 
         #initializing y, q, CoM
         # CoM_x = zeros(1,4)
@@ -345,6 +364,8 @@ function timestep(
     #h^2(∇C(x_j) M^-1 ∇C(x_j)^T)δλ_{j+1} = C(x_j)
 
     # package things use, and return the new state
+    x = reshape(x,(3,n))
+
     e_fin_proj = LinearAlgebra.normalize!(x[:,2] - x[:,1])
     u_fin_proj = rotab(tangent0, e_fin_proj, u0)
 
@@ -355,13 +376,15 @@ function timestep(
     fin_proj[1:3] = u_fin_proj
     fin_proj[4:3n+3] = x_fin_proj
     fin_proj[3n+4:end] = theta_proj
+    #
+    # println("u_fin dim")
+    # println(size(u_fin_proj))
+    #
+    # println("x_fin dim")
+    # println(size(x_fin_proj))
 
-    println("u_fin dim")
-    println(size(u_fin_proj))
-
-    println("x_fin dim")
-    println(size(x_fin_proj))
-
+    println("fin_proj", fin_proj)
+    println("delta", fin_proj - init)
     return fin_proj #vcat(u4, q4),
 end # function
 
