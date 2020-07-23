@@ -107,6 +107,8 @@ end # function
 function F!(f::Array{Float64,1}, q::Array{Float64,1}, u0, param)
     E = mu -> energy_q(mu, u0, param)
     f[:] = -1.0 * Zygote.gradient(E, q)[1]
+
+
 end
 
 
@@ -116,6 +118,13 @@ end
 function that runs a single timestep using a RK2 time step.
     args: F force function
     state
+    ref, r0, x0
+
+ISSUES:
+1.packaging x and x_fin, u_fin
+2.adding in ref, r0, x0
+3.speeding up inv
+
 """
 function timestep(
     F!,
@@ -123,10 +132,14 @@ function timestep(
     state::Array{Float64,1},
     dt::Float64,
     param,
-    t,
+    t
+    ref,
+    r0,
+    x0
 )
     # unpack state
     n = Int(param[1])
+    l0 = param[2]
     x, theta, u0 = state2vars(state, n)
     q_i = vcat(vec(x), theta)
     tangent0 = LinearAlgebra.normalize!(q_i[4:6] - q_i[1:3])
@@ -178,11 +191,8 @@ function timestep(
     e_fin = LinearAlgebra.normalize!(x_fin[4:6] - x_fin[1:3])
     u_fin = rotab(tangent0, e_fin, u0)
 
-    # package things use, and return the new state
     return vcat(u_fin, x_fin) #vcat(u4, q4),
-
 end # function
-
 
 
 function main()
