@@ -3,6 +3,17 @@
 ##
 ##
 
+##
+## ISSUES
+# 1. Fix output
+#
+##
+## CURRENTLY
+# check "Resolving Issues.txt"
+#
+## CODE BELOW
+#
+#
 
 using Plots
 #using Makie
@@ -10,6 +21,7 @@ using Plots
 using Zygote
 using LinearAlgebra
 using NLsolve
+using DelimitedFiles
 
 include("newrod.jl")
 
@@ -118,12 +130,6 @@ end
 function that runs a single timestep using a RK2 time step.
     args: F force function
     state
-    ref, r0, x0
-
-ISSUES:
-1.packaging x and x_fin, u_fin
-2.adding in ref, r0, x0
-3.speeding up inv
 
 """
 function timestep(
@@ -132,7 +138,8 @@ function timestep(
     state::Array{Float64,1},
     dt::Float64,
     param,
-    t
+    t,
+    txt_switch
 )
     # unpack state
     n = Int(param[1])
@@ -245,7 +252,7 @@ function timestep(
         #note major assumption: vor length determines undeformed config
         for i=1:n-1
             C[i] = dot(edges[:,i],edges[:,i]) - undeformed_config
-            println(C[i])
+            # println(C[i])
         end #loop
 
         C_fin = vec(C)
@@ -278,8 +285,11 @@ function timestep(
 
     #init C
     C = constraint(x)
+    maxC = maximum(C)
 
-    while maximum(C) >= 10^-3
+    iteration = 1
+
+    while maxC >= 10^-6
         #vectorize
         x = vec(x)
 
@@ -295,12 +305,12 @@ function timestep(
         # gradC = Zygote.gradient(constraint, x)
 
         #solving for lagrange multipliers
-        println("gradC")
-        println(gradC)
+        # println("gradC")
+        # println(gradC)
         gradC_t = transpose(gradC)
         G = gradC * M_inv * gradC_t
 
-        println("G", G)
+        # println("G", G)
         #note: G is sparse. Not quite banded (note staggered rows)
         G_inv = inv(G) #check runtime
 
@@ -312,6 +322,7 @@ function timestep(
         x_next_fp = x + δx_next
         j += 1
 
+        iteration += 1
         #_______________update_y/v__________________
         # q0 = ones(3,3) #no rotation
         # r0 = r0 #check timestep func!!!
@@ -334,8 +345,20 @@ function timestep(
 
         #initializing C
         C = constraint(x)
-        println("this is C:", C)
-        println("this is max C:", maximum(C))
+        maxC = maximum(C)
+
+        #writing to file
+        # println("maxC: ", maxC)
+
+        #writing to text file
+        if txt_switch == "bend_w/_twist"
+            io = open("maximumconstraint.txt", "a")
+            writedlm(io, maxC)
+            close(io)
+        end #conditional
+
+        # println("this is C:", C)
+        # println("this is max C:", maximum(C))
 
         #initializing y, q, CoM
         # CoM_x = zeros(1,4)
@@ -383,8 +406,16 @@ function timestep(
     # println("x_fin dim")
     # println(size(x_fin_proj))
 
-    println("fin_proj", fin_proj)
-    println("delta", fin_proj - init)
+    # println("fin_proj", fin_proj)
+    # println("delta", fin_proj - init)
+
+    #writing to text file
+    if txt_switch == "bend_w/_twist"
+        io = open("maximumconstraint.txt", "a")
+        write(io, "%%% \n")
+        close(io)
+    end #conditional
+
     return fin_proj #vcat(u4, q4),
 end # function
 
@@ -392,8 +423,16 @@ end # function
 function main()
     println("%%%%%%%%%%%%%%%%%%% Twist, straight %%%%%%%%%%%%%%%%%%%")
 
+    #creating text file
+    # rm("maximumconstraint.txt")
+    # rm()
+    # rm()
+    #
+    txt_switch = "twist_straight"
+    #
+
     tspan = (0.0, 5.0)
-    n_t = 5000
+    n_t = 500
     dt = (tspan[2] - tspan[1]) / n_t
     #param = [3, 1]
     N = 5
@@ -446,7 +485,7 @@ function main()
     display(plt)
 
     for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i)
+        state = timestep(F!, f, state, dt, param, i, txt_switch)
 
         x_cur = reshape(state[4:3*(N+1)], (3, N))
         # println("theta =", state[3N+4:end])
@@ -468,6 +507,8 @@ function main()
     png("test_rod_twist_straight")
 
     println("%%%%%%%%%%%%%%%%%%% bend w/o twist %%%%%%%%%%%%%%%%%%%")
+
+    txt_switch = "bend_w/o_twist"
 
     tspan = (0.0, 10.0)
     n_t = 1000
@@ -518,10 +559,10 @@ function main()
     display(plt)
 
     for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i)
+        state = timestep(F!, f, state, dt, param, i, txt_switch)
 
         x_cur = reshape(state[4:3*(N+1)], (3, N))
-        println("theta =", state[3N+4:end])
+        # println("theta =", state[3N+4:end])
 
         x_1 = x_cur[1, :]
         x_2 = x_cur[2, :]
@@ -540,6 +581,8 @@ function main()
     png("test_rod_bend_notwist")
 
     println("%%%%%%%%%%%%%%%%%%% bend w/ twist %%%%%%%%%%%%%%%%%%%")
+
+    txt_switch = "bend_w/_twist"
 
     tspan = (0.0, 10.0)
     n_t = 1000
@@ -592,7 +635,7 @@ function main()
     display(plt)
 
     for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i)
+        state = timestep(F!, f, state, dt, param, i, txt_switch)
 
         x_cur = reshape(state[4:3*(N+1)], (3, N))
         # println("theta =", state[3N+4:end])
@@ -614,6 +657,8 @@ function main()
     png("test_rod_bent_twist")
 
     println("%%%%%%%%%%%%%%%%%%% Circle, no twist %%%%%%%%%%%%%%%%%%%")
+
+    txt_switch = "circle_w/o_twist"
 
     X = zeros(Float64, 3, 10)
     for i = 1:10
@@ -661,7 +706,7 @@ function main()
     display(plt)
 
     for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i)
+        state = timestep(F!, f, state, dt, param, i, txt_switch)
 
         # println("this is state")
         # println(state)
@@ -679,6 +724,7 @@ function main()
             #     scatter!(plt, x_1, x_2, legend = false)
             # end #cond
 
+            scatter!(plt, x_1, x_2, legend = false)
             plot!(plt, x_1, x_2, legend = false, aspect_ratio=:equal,
                 title = "Open circle without twist")
         end
@@ -695,6 +741,8 @@ function main()
     png("test_circle_1")
 
     println("%%%%%%%%%%%%%%%%%%% Circle, twist %%%%%%%%%%%%%%%%%%%")
+    txt_switch = "circle_w/_twist"
+
     X = zeros(Float64, 3, 10)
     for i = 1:10
         X[1, i] = 10 * cos(-2.0 * pi * (i - 1) / 10)
@@ -742,7 +790,7 @@ function main()
     display(plt)
 
     for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i)
+        state = timestep(F!, f, state, dt, param, i, txt_switch)
 
         # println("this is state")
         # println(state)
@@ -753,7 +801,7 @@ function main()
 
             x_1 = x_cur[1, :]
             x_2 = x_cur[2, :]
-            println("theta =", state[3N+4:end])
+            # println("theta =", state[3N+4:end])
 
             # println("this is x_1, x_2")
             # println(x_1, x_2)
@@ -761,6 +809,7 @@ function main()
             #     scatter!(plt, x_1, x_2, legend = false)
             # end #cond
 
+            scatter!(plt, x_1, x_2, legend = false)
             plot!(plt, x_1, x_2, legend = false, aspect_ratio=:equal,
                 title = "Open circle with twist")
         end
