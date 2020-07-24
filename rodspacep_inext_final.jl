@@ -242,6 +242,7 @@ function timestep(
 
     #initializing C as func
 
+    l0 = 1.
     function constraint(x_inp)
         x_inp = reshape(x_inp,(3,n))
         edges = x_inp[:, 2:end] - x_inp[:, 1:end-1]
@@ -259,6 +260,21 @@ function timestep(
         return C_fin
     end #function
 
+    function vor_length(x_inp)
+        x_inp = reshape(x_inp,(3,n))
+        edges = x_inp[:, 2:end] - x_inp[:, 1:end-1]
+
+        vl = zeros(n-1) #1 per edge
+
+        #note major assumption: vor length determines undeformed config
+        for i=1:n-1
+            vl[i] = sqrt(dot(edges[:,i],edges[:,i]))
+            # println(C[i])
+        end #loop
+
+        vl_fin = vec(vl)
+        return vl_fin
+    end #function
 
     #initializing y (keep track of velocity), q, CoM
     # CoM_x = zeros(1,4)
@@ -286,6 +302,8 @@ function timestep(
     #init C
     C = constraint(x)
     maxC = maximum(C)
+
+    vor_len = vor_length(x)
 
     iteration = 1
 
@@ -347,13 +365,21 @@ function timestep(
         C = constraint(x)
         maxC = maximum(C)
 
+        #initializing vor length
+        vor_len = vor_length(x)
+
         #writing to file
         # println("maxC: ", maxC)
 
         #writing to text file
         if txt_switch == "bend_w/_twist"
             io = open("maximumconstraint.txt", "a")
-            writedlm(io, maxC)
+            writedlm(io, C)
+            write(io, "* \n")
+            close(io)
+
+            io = open("vor_length.txt", "a")
+            writedlm(io, "* ", vor_len)
             close(io)
         end #conditional
 
@@ -412,7 +438,17 @@ function timestep(
     #writing to text file
     if txt_switch == "bend_w/_twist"
         io = open("maximumconstraint.txt", "a")
-        write(io, "%%% \n")
+        # write(io, maxC, "\n")
+        # C = constraint(x)
+        write(io, "______ \n")
+        write(io, "______ \n")
+
+        close(io)
+
+        io = open("vor_length.txt", "a")
+        write(io, "fin: ")
+        writedlm(io, vor_len)
+        write(io, "______ \n")
         close(io)
     end #conditional
 
@@ -424,7 +460,14 @@ function main()
     println("%%%%%%%%%%%%%%%%%%% Twist, straight %%%%%%%%%%%%%%%%%%%")
 
     #creating text file
-    # rm("maximumconstraint.txt")
+    io = open("maximumconstraint.txt", "a")
+    close(io)
+    rm("maximumconstraint.txt")
+
+    io = open("vor_length.txt", "a")
+    close(io)
+    rm("vor_length.txt")
+
     # rm()
     # rm()
     #
@@ -553,6 +596,7 @@ function main()
     x_cur = reshape(state[4:3*(N+1)], (3, N))
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
+    x_3 = x_cur[3, :]
     scatter!(plt, x_1, x_2, label = legend = false)
     plot!(plt, x_1, x_2, label = legend = false, aspect_ratio=:equal)
 
@@ -566,6 +610,7 @@ function main()
 
         x_1 = x_cur[1, :]
         x_2 = x_cur[2, :]
+        x_3 = x_cur[3, :]
         scatter!(plt, x_1, x_2, legend = false)
         plot!(plt, x_1, x_2, legend = false,
                 aspect_ratio=:equal, title = "90° bend without twist")
@@ -583,6 +628,10 @@ function main()
     println("%%%%%%%%%%%%%%%%%%% bend w/ twist %%%%%%%%%%%%%%%%%%%")
 
     txt_switch = "bend_w/_twist"
+
+    io = open("maximumconstraint.txt", "a")
+    write(io, "bend w/ twist \n")
+    close(io)
 
     tspan = (0.0, 10.0)
     n_t = 1000
@@ -623,14 +672,14 @@ function main()
 
     f = zeros(Float64, 4 * N)
 
-    plt = plot(1, xlim = (-1, 2), ylim = (-1, 2))
+    # plt = plot(1, xlim = (-1, 2), ylim = (-1, 2))
     state = state_0[:]
     x_cur = reshape(state[4:3*(N+1)], (3, N))
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
-    scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, label = legend = false,
-            title = "", aspect_ratio=:equal)
+    # scatter!(plt, x_1, x_2, label = legend = false)
+    # plot!(plt, x_1, x_2, label = legend = false,
+    #         title = "", aspect_ratio=:equal)
 
     display(plt)
 
@@ -784,6 +833,7 @@ function main()
     x_cur = reshape(state[4:3*(N+1)], (3, N))
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
+    x_3 = x_cur[3, :]
     scatter!(plt, x_1, x_2, label = legend = false)
     plot!(plt, x_1, x_2, aspect_ratio=:equal, label = legend = false)
 
