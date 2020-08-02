@@ -3,6 +3,15 @@
 ##
 ##
 
+##
+## ISSUES
+# 1. NaN issue when taking gradients
+# 2. Slow run-time for systems w/o stretch
+# 3. Asymmetry in resolution of twist
+##
+## CODE
+#
+#
 
 using Plots
 #using Makie
@@ -10,6 +19,8 @@ using Plots
 using Zygote
 using LinearAlgebra
 using NLsolve
+using DelimitedFiles
+using ColorSchemes
 
 include("newrod.jl")
 
@@ -81,7 +92,7 @@ function energy_q(q, u0::Array{Float64,1}, p)
     Ebend = 0.5 * Ebend
     Estretch = 0.5 * Estretch
     Etwist = 0.5 * Etwist
-    return Ebend + Etwist #+ Estretch
+    return Ebend + Estretch #+ Etwist
 end # function
 
 
@@ -133,9 +144,6 @@ function timestep(
     dt::Float64,
     param,
     t
-    ref,
-    r0,
-    x0
 )
     # unpack state
     n = Int(param[1])
@@ -194,12 +202,29 @@ function timestep(
     return vcat(u_fin, x_fin) #vcat(u4, q4),
 end # function
 
+"""
+Maps inp_theta to float between 0., 1.
+"""
+function twist_color(inp_theta)
+    fin_col = zeros(size(inp_theta))
+
+    for i=1:size(inp_theta)[1]
+        col =  mod(inp_theta[i], 2*pi)
+        col = col / (2*pi)
+        fin_col[i] = col
+    end #for
+
+    return fin_col
+end #function
 
 function main()
+    per_col = get(colorschemes[:cyclic_mygbm_30_95_c78_n256_s25],
+                    range(1.0,stop = 256.0), :clamp)
+
     println("%%%%%%%%%%%%%%%%%%% Twist, straight %%%%%%%%%%%%%%%%%%%")
 
     tspan = (0.0, 5.0)
-    n_t = 5000
+    n_t = 500
     dt = (tspan[2] - tspan[1]) / n_t
     #param = [3, 1]
     N = 5
@@ -246,8 +271,23 @@ function main()
     x_cur = reshape(state[4:3*(N+1)], (3, N))
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
-    scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, label = legend = false, aspect_ratio=:equal)
+
+    twist_weights = twist_color(theta_0)
+    fin_twist_weights = zeros(N-1)
+
+    for i = 1:N-1
+        fin_twist_weights[i] = (twist_weights[i] + twist_weights[i+1])  / 2
+    end #loop
+
+    for i = 1:N-1
+        scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                label = legend = false)
+        plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                label = legend = false,
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+                aspect_ratio=:equal)
+    end #for loop
+
 
     display(plt)
 
@@ -259,10 +299,23 @@ function main()
 
         x_1 = x_cur[1, :]
         x_2 = x_cur[2, :]
-        scatter!(plt, x_1, x_2, legend = false)
-        plot!(plt, x_1, x_2, legend = false,
-                aspect_ratio=:equal, title = "Straight rod with uniform twist")
-    end
+
+        theta_cur = state[3*(N+1) + 1:end]
+        twist_weights = twist_color(theta_cur)
+
+        for i = 1:N-1
+            fin_twist_weights[i] = (twist_weights[i] + twist_weights[i+1]) / 2
+        end #loop
+
+        for i = 1:N-1
+            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                    label = legend = false)
+            plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                    label = legend = false,
+                    linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+                    aspect_ratio=:equal)
+        end #for
+    end #for
 
     println(f)
     println("check sum ", isapprox(sum(f), 0., atol=1e-4))
@@ -318,8 +371,23 @@ function main()
     x_cur = reshape(state[4:3*(N+1)], (3, N))
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
-    scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, label = legend = false, aspect_ratio=:equal)
+
+
+    twist_weights = twist_color(theta_0)
+    fin_twist_weights = zeros(N-1)
+
+    for i = 1:N-1
+        fin_twist_weights[i] = (twist_weights[i] + twist_weights[i+1])  / 2
+    end #loop
+
+    for i = 1:N-1
+        scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                label = legend = false)
+        plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                label = legend = false,
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+                aspect_ratio=:equal)
+    end #for loop
 
     display(plt)
 
@@ -327,14 +395,23 @@ function main()
         state = timestep(F!, f, state, dt, param, i)
 
         x_cur = reshape(state[4:3*(N+1)], (3, N))
-        println("theta =", state[3N+4:end])
+        # println("theta =", state[3N+4:end])
+        theta_cur = state[3*(N+1) + 1:end]
+        twist_weights = twist_color(theta_cur)
 
-        x_1 = x_cur[1, :]
-        x_2 = x_cur[2, :]
-        scatter!(plt, x_1, x_2, legend = false)
-        plot!(plt, x_1, x_2, legend = false,
-                aspect_ratio=:equal, title = "90° bend without twist")
-    end
+        for i = 1:N-1
+            fin_twist_weights[i] = (twist_weights[i] + twist_weights[i+1]) / 2
+        end #loop
+
+        for i = 1:N-1
+            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                    label = legend = false)
+            plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                    label = legend = false,
+                    linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+                    aspect_ratio=:equal)
+        end #for
+    end #for
 
     println(f)
     println("check sum ", isapprox(sum(f), 0., atol=1e-4))
@@ -347,7 +424,7 @@ function main()
 
     println("%%%%%%%%%%%%%%%%%%% bend w/ twist %%%%%%%%%%%%%%%%%%%")
 
-    tspan = (0.0, 10.0)
+    tspan = (0.0, 0.1)
     n_t = 1000
     dt = (tspan[2] - tspan[1]) / n_t
     #param = [3, 1]
@@ -391,9 +468,21 @@ function main()
     x_cur = reshape(state[4:3*(N+1)], (3, N))
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
-    scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, label = legend = false,
-            title = "", aspect_ratio=:equal)
+    twist_weights = twist_color(theta_0)
+    fin_twist_weights = zeros(N-1)
+
+    for i = 1:N-1
+        fin_twist_weights[i] = (twist_weights[i] + twist_weights[i+1])  / 2
+    end #loop
+
+    for i = 1:N-1
+        scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                label = legend = false)
+        plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                label = legend = false,
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+                aspect_ratio=:equal)
+    end #for loop
 
     display(plt)
 
@@ -402,13 +491,24 @@ function main()
 
         x_cur = reshape(state[4:3*(N+1)], (3, N))
         # println("theta =", state[3N+4:end])
+        theta_cur = state[3*(N+1) + 1:end]
+        twist_weights = twist_color(theta_cur)
 
-        x_1 = x_cur[1, :]
-        x_2 = x_cur[2, :]
-        scatter!(plt, x_1, x_2, legend = false)
-        plot!(plt, x_1, x_2, aspect_ratio=:equal,
-            legend = false, title = "90° bend with twist")
-    end
+        for i = 1:N-1
+            fin_twist_weights[i] = (twist_weights[i] + twist_weights[i+1]) / 2
+        end #loop
+
+        for i = 1:N-1
+            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                    label = legend = false)
+            plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                    label = legend = false,
+                    linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+                    aspect_ratio=:equal)
+        end #for
+
+        println("this is theta", theta_cur)
+    end #for
 
     println(f)
     println("check sum ", isapprox(sum(f), 0., atol=1e-4))
@@ -450,7 +550,7 @@ function main()
     # tspan = (0.0, 10^4 * 3)
     # n_t = 10^4 * 3
 
-    tspan = (0.0, 10^3)
+    tspan = (0.0, 1.)
     n_t = 10^3
     dt = (tspan[2] - tspan[1]) / n_t
 
@@ -485,6 +585,7 @@ function main()
             #     scatter!(plt, x_1, x_2, legend = false)
             # end #cond
 
+            scatter!(plt, x_1, x_2, legend = false)
             plot!(plt, x_1, x_2, legend = false, aspect_ratio=:equal,
                 title = "Open circle without twist")
         end
@@ -531,8 +632,8 @@ function main()
     # tspan = (0.0, 10^4 * 3)
     # n_t = 10^4 * 3
 
-    tspan = (0.0, 10^2)
-    n_t = 10^2
+    tspan = (0.0, 1.)
+    n_t = 10^3
     dt = (tspan[2] - tspan[1]) / n_t
 
     f = zeros(Float64, 4 * N)
@@ -559,7 +660,7 @@ function main()
 
             x_1 = x_cur[1, :]
             x_2 = x_cur[2, :]
-            println("theta =", state[3N+4:end])
+            # println("theta =", state[3N+4:end])
 
             # println("this is x_1, x_2")
             # println(x_1, x_2)
@@ -567,6 +668,7 @@ function main()
             #     scatter!(plt, x_1, x_2, legend = false)
             # end #cond
 
+            scatter!(plt, x_1, x_2, legend = false)
             plot!(plt, x_1, x_2, legend = false, aspect_ratio=:equal,
                 title = "Open circle with twist")
         end
