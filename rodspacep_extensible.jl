@@ -209,8 +209,8 @@ function twist_color(inp_theta)
     fin_col = zeros(size(inp_theta))
 
     for i=1:size(inp_theta)[1]
-        col =  mod(inp_theta[i], 2*pi)
-        col = col / (2*pi)
+        col = inp_theta[i] / (2*pi)
+        col =  mod(col, 1)
         fin_col[i] = col
     end #for
 
