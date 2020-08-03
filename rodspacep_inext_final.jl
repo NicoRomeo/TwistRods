@@ -5,7 +5,7 @@
 
 ##
 ## ISSUES
-# 1. Fix output
+# 1. Fix coloring
 #
 ##
 ## CURRENTLY
@@ -140,7 +140,6 @@ function timestep(
     state::Array{Float64,1},
     dt::Float64,
     param,
-    t,
     txt_array,
     err_tol
 )
@@ -563,7 +562,7 @@ function runsim(
 
         avg1 = (twist_weights[i] + twist_weights[i+1])  / 2
         avg2 = mod(avg1 + 0.5,1)
-        
+
         delta_avg1 = abs(avg1 - (twist_weights[i+1]))
         delta_avg2 = abs(avg2 - (twist_weights[i+1]))
 
@@ -585,11 +584,11 @@ function runsim(
     end #for loop
 
     title!(title)
-    display(plt)
+    # display(plt)
 
     #final plot / animation ==> ISSUE ==> make animation
-    for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i, txt_array, err_tol)
+    function step!()
+        state = timestep(F!, f, state, dt, param, txt_array, err_tol)
 
         x_cur = reshape(state[4:3*(N+1)], (3, N))
         # println("theta =", state[3N+4:end])
@@ -612,21 +611,29 @@ function runsim(
             else
                 fin_twist_weights[i] = avg2
             end #conditional
+        end #for
 
-        end #loop
+        plt = plot()
+
+        scatter!(plt, x_cur[1,1], x_cur[2,1],
+                label = legend = false,
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[1]])
 
         for i = 1:N-1
-            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+            scatter!(plt, x_cur[1,i+1], x_cur[2,i+1],
                     label = legend = false)
             plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
                     label = legend = false,
                     linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[fin_twist_weights[i]])
         end #for
-    end #for loop
 
-    display(plt)
-    title!(title)
-    #force/torque checks
+        title!(title)
+    end #function
+
+    anim = @animate for i = 1:n_t
+        step!()
+    end every 1
+    gif(anim, string(title,".gif"), fps = 25)
 
     println(f)
     println("check sum ", isapprox(sum(f), 0., atol=1e-4))
@@ -637,6 +644,46 @@ function runsim(
     display(plt)
     println("u =", state[1:3])
     png(title)
+
+    # for i = 1:n_t
+    #     state = timestep(F!, f, state, dt, param, i, txt_array, err_tol)
+    #
+    #     x_cur = reshape(state[4:3*(N+1)], (3, N))
+    #     # println("theta =", state[3N+4:end])
+    #
+    #     theta_cur = state[3*(N+1) + 1:end]
+    #     twist_weights = twist_color(theta_cur)
+    #
+    #     for i = 1:N-1
+    #         hand_switch = 0
+    #
+    #         avg1 = (twist_weights[i] + twist_weights[i+1])  / 2
+    #         avg2 = mod(avg1 + 0.5,1)
+    #
+    #         #FIX BELOW
+    #         delta_avg1 = abs(avg1 - (twist_weights[i+1]))
+    #         delta_avg2 = abs(avg2 - (twist_weights[i+1]))
+    #
+    #         if delta_avg1 < delta_avg2
+    #             fin_twist_weights[i] = avg1
+    #         else
+    #             fin_twist_weights[i] = avg2
+    #         end #conditional
+    #
+    #     end #loop
+    #
+    #     for i = 1:N-1
+    #         scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+    #                 label = legend = false)
+    #         plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+    #                 label = legend = false,
+    #                 linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[fin_twist_weights[i]])
+    #     end #for
+    # end #for loop
+
+    #force/torque checks
+
+
 
 end #function
 
@@ -661,7 +708,7 @@ function main()
     name = "bend_wo_twist"
     dim = 2
     error_tolerance_C = 10^-6
-    timespan = (0.,10.)
+    timespan = (0.,5.)
     num_tstep = 1000
     N_v = 3
     vor = 1.
@@ -676,7 +723,7 @@ function main()
     name = "bend_w_twist"
     dim = 2
     error_tolerance_C = 10^-6
-    timespan = (0.,10.)
+    timespan = (0.,5.)
     num_tstep = 1000
     N_v = 3
     vor = 1.
