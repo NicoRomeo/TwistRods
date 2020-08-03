@@ -16,6 +16,7 @@
 #
 
 using Plots
+using ColorSchemes
 #using Makie
 #using Flux
 using Zygote
@@ -132,6 +133,7 @@ function that runs a single timestep using a RK2 time step.
     state
 
 """
+timestep(F!, f, state, dt, param, i, txt_array, err_tol)
 function timestep(
     F!,
     f::Array{Float64,1},
@@ -139,12 +141,15 @@ function timestep(
     dt::Float64,
     param,
     t,
-    txt_switch
+    txt_array,
+    err_tol
 )
     # unpack state
     n = Int(param[1])
     l0 = param[2]
     x, theta, u0 = state2vars(state, n)
+    init_state = state
+
     q_i = vcat(vec(x), theta)
     tangent0 = LinearAlgebra.normalize!(q_i[4:6] - q_i[1:3])
 
@@ -242,7 +247,6 @@ function timestep(
 
     #initializing C as func
 
-    l0 = 1.
     function constraint(x_inp)
         x_inp = reshape(x_inp,(3,n))
         edges = x_inp[:, 2:end] - x_inp[:, 1:end-1]
@@ -305,9 +309,19 @@ function timestep(
 
     vor_len = vor_length(x)
 
+    io = open(txt_array[1], "a")
+    writedlm(io, C)
+    write(io, "* \n")
+    close(io)
+
+    io = open(txt_array[2], "a")
+    writedlm(io, "* ", vor_len)
+    close(io)
+
     iteration = 1
 
-    while maxC >= 10^-6
+    # while maxC >= err_tol || maxC <= -err_tol
+    while maxC >= 10^-4 || maxC <= -10^-4
         #vectorize
         x = vec(x)
 
@@ -372,16 +386,15 @@ function timestep(
         # println("maxC: ", maxC)
 
         #writing to text file
-        if txt_switch == "bend_w/_twist"
-            io = open("maximumconstraint.txt", "a")
-            writedlm(io, C)
-            write(io, "* \n")
-            close(io)
 
-            io = open("vor_length.txt", "a")
-            writedlm(io, "* ", vor_len)
-            close(io)
-        end #conditional
+        io = open(txt_array[1], "a")
+        writedlm(io, C)
+        write(io, "* \n")
+        close(io)
+
+        io = open(txt_array[2], "a")
+        writedlm(io, "* ", vor_len)
+        close(io)
 
         # println("this is C:", C)
         # println("this is max C:", maximum(C))
@@ -435,465 +448,292 @@ function timestep(
     # println("fin_proj", fin_proj)
     # println("delta", fin_proj - init)
 
+    #calculating final f
+    f_prop = (fin_proj - init_state)/dt
+
     #writing to text file
-    if txt_switch == "bend_w/_twist"
-        io = open("maximumconstraint.txt", "a")
-        # write(io, maxC, "\n")
-        # C = constraint(x)
-        write(io, "______ \n")
-        write(io, "______ \n")
 
-        close(io)
+    io = open(txt_array[1], "a")
+    # write(io, maxC, "\n")
+    # C = constraint(x)
+    write(io, "______ \n")
+    write(io, "______ \n")
+    close(io)
 
-        io = open("vor_length.txt", "a")
-        write(io, "fin: ")
-        writedlm(io, vor_len)
-        write(io, "______ \n")
-        close(io)
-    end #conditional
+    io = open(txt_array[2], "a")
+    write(io, "fin: ")
+    writedlm(io, vor_len)
+    write(io, "______ \n")
+    close(io)
+
+    io = open(txt_array[3], "a")
+    writedlm(io, sum(f_prop))
+    write(io, "________\n")
+    close(io)
 
     return fin_proj #vcat(u4, q4),
 end # function
 
+function twist_color(inp_theta)
+    fin_col = zeros(size(inp_theta))
+
+    for i=1:size(inp_theta)[1]
+        col = mod(inp_theta[i], 2*pi)
+        col = col / (2*pi)
+        fin_col[i] = col
+    end #for
+
+    return fin_col
+end #function
+
+function runsim(
+    title,
+    dims,
+    err_tol,
+    tspan,
+    n_t,
+    N,
+    l0,
+    pos_0,
+    theta_0,
+    u_0
+)
+    println("%%%%%%%%%%%%", title, "%%%%%%%%%%%%%%%")
+
+    #initializing text files
+    max_txt = string(title, "_maxc", ".txt")
+    vor_txt = string(title, "_vor", ".txt")
+    sum_f  = string(title, "_sum_f", ".txt")
+
+    txt_array = [max_txt, vor_txt, sum_f]
+
+    #re-initializing files
+    io = open(max_txt, "a")
+    close(io)
+    rm(max_txt)
+
+    io = open(vor_txt, "a")
+    close(io)
+    rm(vor_txt)
+
+    io = open(sum_f, "a")
+    close(io)
+    rm(sum_f)
+
+    #opening files
+
+    io = open(max_txt, "a")
+    io = open(vor_txt, "a")
+    io = open(sum_f, "a")
+
+    # setting txt_switch
+    # txt_switch = title
+
+    #initializing sim
+    dt = (tspan[2] - tspan[1]) / n_t
+    #param = [3, 1]
+
+    param = [N, l0]  #parameter vector
+
+    println("this is pos_0: ")
+    println(pos_0)
+
+    state_0 = vars2state(pos_0, theta_0, u_0)
+
+    println("state 0")
+    println(state_0)
+    x, theta, u_0 = state2vars(state_0, N)
+    println("x, theta, u_0")
+    println(x)
+    println(theta)
+    println(u_0)
+
+    f = zeros(Float64, 4 * N)
+
+    plt = plot()
+    state = state_0[:]
+    x_cur = reshape(state[4:3*(N+1)], (3, N))
+    x_1 = x_cur[1, :]
+    x_2 = x_cur[2, :]
+    twist_weights = twist_color(theta_0)
+    fin_twist_weights = zeros(N-1)
+
+    for i = 1:N-1
+        hand_switch = 0
+
+        avg1 = (twist_weights[i] + twist_weights[i+1])  / 2
+        avg2 = mod(avg1 + 0.5,1)
+        
+        delta_avg1 = abs(avg1 - (twist_weights[i+1]))
+        delta_avg2 = abs(avg2 - (twist_weights[i+1]))
+
+        if delta_avg1 < delta_avg2
+            fin_twist_weights[i] = avg1
+        else
+            fin_twist_weights[i] = avg2
+        end #conditional
+
+    end #loop
+
+    #initializing plot
+    for i = 1:N-1
+        scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                label = legend = false)
+        plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                label = legend = false,
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[fin_twist_weights[i]])
+    end #for loop
+
+    title!(title)
+    display(plt)
+
+    #final plot / animation ==> ISSUE ==> make animation
+    for i = 1:n_t
+        state = timestep(F!, f, state, dt, param, i, txt_array, err_tol)
+
+        x_cur = reshape(state[4:3*(N+1)], (3, N))
+        # println("theta =", state[3N+4:end])
+
+        theta_cur = state[3*(N+1) + 1:end]
+        twist_weights = twist_color(theta_cur)
+
+        for i = 1:N-1
+            hand_switch = 0
+
+            avg1 = (twist_weights[i] + twist_weights[i+1])  / 2
+            avg2 = mod(avg1 + 0.5,1)
+
+            #FIX BELOW
+            delta_avg1 = abs(avg1 - (twist_weights[i+1]))
+            delta_avg2 = abs(avg2 - (twist_weights[i+1]))
+
+            if delta_avg1 < delta_avg2
+                fin_twist_weights[i] = avg1
+            else
+                fin_twist_weights[i] = avg2
+            end #conditional
+
+        end #loop
+
+        for i = 1:N-1
+            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                    label = legend = false)
+            plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+                    label = legend = false,
+                    linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[fin_twist_weights[i]])
+        end #for
+    end #for loop
+
+    display(plt)
+    title!(title)
+    #force/torque checks
+
+    println(f)
+    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
+    println("sum(f) = ", sum(f))
+    println("sum(f_bend) = ", sum(f[1:3N]))
+    println("sum(f_twist) = ", sum(f[3N+1:4N]))
+
+    display(plt)
+    println("u =", state[1:3])
+    png(title)
+
+end #function
 
 function main()
-    println("%%%%%%%%%%%%%%%%%%% Twist, straight %%%%%%%%%%%%%%%%%%%")
 
-    #creating text file
-    io = open("maximumconstraint.txt", "a")
-    close(io)
-    rm("maximumconstraint.txt")
+    #twist_straight
+    name = "twist_straight"
+    dim = 2
+    error_tolerance_C = 10^-6
+    timespan = (0.,5.)
+    num_tstep = 200
+    N_v = 5
+    vor = 1.
+    init_pos = [0. 1. 2. 3. 4.; 0. 0. 0. 0. 0.; 0. 0. 0. 0. 0.]
+    init_theta = [0., 1.0, 2.0, 3., 4.]
+    init_norm = [0.0, 1.0, 0.0]
 
-    io = open("vor_length.txt", "a")
-    close(io)
-    rm("vor_length.txt")
+    runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
+            init_pos, init_theta, init_norm)
 
-    # rm()
-    # rm()
-    #
-    txt_switch = "twist_straight"
-    #
+    #bend w/o twist
+    name = "bend_wo_twist"
+    dim = 2
+    error_tolerance_C = 10^-6
+    timespan = (0.,10.)
+    num_tstep = 1000
+    N_v = 3
+    vor = 1.
+    init_pos = [1. 0. 0.; 0. 0. 1.; 0. 0. 0.]
+    init_theta = [0., 0., 0.]
+    init_norm = [0.0, 1.0, 0.0]
 
-    tspan = (0.0, 5.0)
-    n_t = 500
-    dt = (tspan[2] - tspan[1]) / n_t
-    #param = [3, 1]
-    N = 5
-    l0 = 1
-    param = [N, l0]  #parameter vector
-    pos_0 = permutedims(
-        [0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0; 4.0 1.0 2.0],
-        (2, 1),
-    )
-    pos_0 = permutedims([0.0 0.0 0.0; 1.0 0.0 0.0; 2.0 0.0 0.0;
-                        3.0 0.0 0.0; 4.0 0.0 0.0], (2, 1))
+    runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
+            init_pos, init_theta, init_norm)
 
-    pos_0 = permutedims([0.0 0.0 0.0; 1.0 0.0 0.0; 2.0 0.0 0.0;
-                        3.0 0.0 0.0; 4.0 0.0 0.0], (2, 1))
+    #bend w/ twist
+    name = "bend_w_twist"
+    dim = 2
+    error_tolerance_C = 10^-6
+    timespan = (0.,10.)
+    num_tstep = 1000
+    N_v = 3
+    vor = 1.
+    init_pos = [1. 0. 0.; 0. 0. 1.; 0. 0. 0.]
+    init_theta = [0., 1.0, 2.0]
+    init_norm = [0.0, 1.0, 0.0]
 
-    #straight line
-    #pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 0.0], (2, 1))
+    runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
+            init_pos, init_theta, init_norm)
 
-    println("this is pos_0: ")
-    println(pos_0)
+    #circle w/o twist
+    name = "circle_wo_twist"
+    dim = 2
+    error_tolerance_C = 10^-6
+    timespan = (0.,10.)
+    num_tstep = 100
+    N_v = 10
 
-    #pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
-
-    theta_0 = [0., 1.0, 2.0, 3., 4.]
-    # theta_0 = [0.0, 0.0, 0.0]
-    u_0 = [0.0, 1.0, 0.0]
-    # u_0 = [0.0, 0.0, 1.0]
-    # u_0 = [0.0, 1/sqrt(2), 1/sqrt(2)]
-
-    state_0 = vars2state(pos_0, theta_0, u_0)
-
-    println("state 0")
-    println(state_0)
-    x, theta, u_0 = state2vars(state_0, N)
-    println("x, theta, u_0")
-    println(x)
-    println(theta)
-    println(u_0)
-
-    f = zeros(Float64, 4 * N)
-
-    plt = plot(1, xlim = (-1, 5), ylim = (-1, 5))
-    state = state_0[:]
-    x_cur = reshape(state[4:3*(N+1)], (3, N))
-    x_1 = x_cur[1, :]
-    x_2 = x_cur[2, :]
-    scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, label = legend = false, aspect_ratio=:equal)
-
-    display(plt)
-
-    for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i, txt_switch)
-
-        x_cur = reshape(state[4:3*(N+1)], (3, N))
-        # println("theta =", state[3N+4:end])
-
-        x_1 = x_cur[1, :]
-        x_2 = x_cur[2, :]
-        scatter!(plt, x_1, x_2, legend = false)
-        plot!(plt, x_1, x_2, legend = false,
-                aspect_ratio=:equal, title = "Straight rod with uniform twist")
-    end
-
-    println(f)
-    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
-    println("sum(f) = ", sum(f))
-    display(plt)
-
-    println("u =", state[1:3])
-
-    png("test_rod_twist_straight")
-
-    println("%%%%%%%%%%%%%%%%%%% bend w/o twist %%%%%%%%%%%%%%%%%%%")
-
-    txt_switch = "bend_w/o_twist"
-
-    tspan = (0.0, 10.0)
-    n_t = 1000
-    dt = (tspan[2] - tspan[1]) / n_t
-    #param = [3, 1]
-    N = 3
-    l0 = 1
-    param = [N, l0]  #parameter vector
-    pos_0 = permutedims(
-        [0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0; 4.0 1.0 2.0],
-        (2, 1),
-    )
-    pos_0 = permutedims([1.0 0.0 0.0; 0.0 0.0 0.0; 0.0 1.0 0.0], (2, 1))
-
-    #straight line
-    #pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 0.0], (2, 1))
-
-    println("this is pos_0: ")
-    println(pos_0)
-
-    #pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
-
-    theta_0 = [0.0, 0.0, 0.0]
-    # theta_0 = [0.0, 0.0, 0.0]
-    u_0 = [0.0, 0.0, 1.0]
-    u_0 = [0.0, 0.0, -1.0]
-
-    state_0 = vars2state(pos_0, theta_0, u_0)
-
-    println("state 0")
-    println(state_0)
-    x, theta, u_0 = state2vars(state_0, N)
-    println("x, theta, u_0")
-    println(x)
-    println(theta)
-    println(u_0)
-
-    f = zeros(Float64, 4 * N)
-
-    plt = plot(1, xlim = (-1, 2), ylim = (-1, 2))
-    state = state_0[:]
-    x_cur = reshape(state[4:3*(N+1)], (3, N))
-    x_1 = x_cur[1, :]
-    x_2 = x_cur[2, :]
-    x_3 = x_cur[3, :]
-    scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, label = legend = false, aspect_ratio=:equal)
-
-    display(plt)
-
-    for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i, txt_switch)
-
-        x_cur = reshape(state[4:3*(N+1)], (3, N))
-        # println("theta =", state[3N+4:end])
-
-        x_1 = x_cur[1, :]
-        x_2 = x_cur[2, :]
-        x_3 = x_cur[3, :]
-        scatter!(plt, x_1, x_2, legend = false)
-        plot!(plt, x_1, x_2, legend = false,
-                aspect_ratio=:equal, title = "90° bend without twist")
-    end
-
-    println(f)
-    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
-    println("sum(f) = ", sum(f))
-    display(plt)
-
-    println("u =", state[1:3])
-
-    png("test_rod_bend_notwist")
-
-    println("%%%%%%%%%%%%%%%%%%% bend w/ twist %%%%%%%%%%%%%%%%%%%")
-
-    txt_switch = "bend_w/_twist"
-
-    io = open("maximumconstraint.txt", "a")
-    write(io, "bend w/ twist \n")
-    close(io)
-
-    tspan = (0.0, 10.0)
-    n_t = 1000
-    dt = (tspan[2] - tspan[1]) / n_t
-    #param = [3, 1]
-    N = 3
-    l0 = 1
-    param = [N, l0]  #parameter vector
-    pos_0 = permutedims(
-        [0.0 0.0 0.0; 0.0 1.0 0.0; 1.0 1.0 0.0; 4.0 1.0 2.0],
-        (2, 1),
-    )
-    pos_0 = permutedims([1.0 0.0 0.0; 0.0 0.0 0.0; 0.0 1.0 0.0], (2, 1))
-    pos_0 = permutedims([0.0 1.0 0.0; 0.0 0.0 0.0; 1.0 0.0 0.0], (2, 1))
-
-    #straight line
-    #pos_0 = permutedims([0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 0.0], (2, 1))
-
-    println("this is pos_0: ")
-    println(pos_0)
-
-    #pos_0 = [0.0 0.0 0.0; 0.0 1.0 4.0; 0.0 0.0 0.0]
-
-    theta_0 = [0.0, 1., 2.]
-    # theta_0 = [0.0, 0.0, 0.0]
-    u_0 = [0.0, 0.0, 1.0]
-    u_0 = [0.0, 0.0, -1.0]
-
-    state_0 = vars2state(pos_0, theta_0, u_0)
-
-    println("state 0")
-    println(state_0)
-    x, theta, u_0 = state2vars(state_0, N)
-    println("x, theta, u_0")
-    println(x)
-    println(theta)
-    println(u_0)
-
-    f = zeros(Float64, 4 * N)
-
-    # plt = plot(1, xlim = (-1, 2), ylim = (-1, 2))
-    state = state_0[:]
-    x_cur = reshape(state[4:3*(N+1)], (3, N))
-    x_1 = x_cur[1, :]
-    x_2 = x_cur[2, :]
-    # scatter!(plt, x_1, x_2, label = legend = false)
-    # plot!(plt, x_1, x_2, label = legend = false,
-    #         title = "", aspect_ratio=:equal)
-
-    display(plt)
-
-    for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i, txt_switch)
-
-        x_cur = reshape(state[4:3*(N+1)], (3, N))
-        # println("theta =", state[3N+4:end])
-
-        x_1 = x_cur[1, :]
-        x_2 = x_cur[2, :]
-        scatter!(plt, x_1, x_2, legend = false)
-        plot!(plt, x_1, x_2, aspect_ratio=:equal,
-            legend = false, title = "90° bend with twist")
-    end
-
-    println(f)
-    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
-    println("sum(f) = ", sum(f))
-    display(plt)
-
-    println("u =", state[1:3])
-
-    png("test_rod_bent_twist")
-
-    println("%%%%%%%%%%%%%%%%%%% Circle, no twist %%%%%%%%%%%%%%%%%%%")
-
-    txt_switch = "circle_w/o_twist"
-
-    X = zeros(Float64, 3, 10)
+    init_pos = zeros(Float64, 3, 10)
     for i = 1:10
-        X[1, i] = 10 * cos(-2.0 * pi * (i - 1) / 10)
-        X[2, i] = 10 * sin(-2.0 * pi * (i - 1) / 10)
+        init_pos[1, i] = 10 * cos(-2.0 * pi * (i - 1) / 10)
+        init_pos[2, i] = 10 * sin(-2.0 * pi * (i - 1) / 10)
     end #for loop
-    N = 10
 
-    rad = 10
-    #l0 = sqrt(2*rad^2*(1-cos(2*pi/10)))
+    e_0 = normalize(init_pos[:, 2] - init_pos[:, 1])
+    l_i = init_pos[:, 2] - init_pos[:, 1]
+    vor = sqrt(l_i[1]^2 + l_i[2]^2)
 
-    theta_0 = zeros(Float64, N)
-    e_0 = normalize(X[:, 2] - X[:, 1])
-    l_i = X[:, 2] - X[:, 1]
-    l0 = sqrt(l_i[1]^2 + l_i[2]^2)
-    # l0 = 1
-    param = [N, l0]
+    init_theta = zeros(Float64, N_v)
+    init_norm = [e_0[2], -e_0[1], 0.0]
 
-    println("e_0 norm ", e_0'e_0 )
+    runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
+            init_pos, init_theta, init_norm)
 
-    #change below ! fix
-    u_0 = [e_0[2], -e_0[1], 0.0]
-    # u_0 = [0., 0., 1.]
-    state_0 = vars2state(X, theta_0, u_0)
+    #circle w/ twist
+    name = "circle_w_twist"
+    dim = 2
+    error_tolerance_C = 10^-6
+    timespan = (0.,10.)
+    num_tstep = 100
+    N_v = 10
 
-    # tspan = (0.0, 500.0)
-    #BELOW:
-    # tspan = (0.0, 10^4 * 3)
-    # n_t = 10^4 * 3
-
-    tspan = (0.0, 10^3)
-    n_t = 10^3
-    dt = (tspan[2] - tspan[1]) / n_t
-
-    f = zeros(Float64, 4 * N)
-
-    plt = plot()
-    state = state_0[:]
-    x_cur = reshape(state[4:3*(N+1)], (3, N))
-    x_1 = x_cur[1, :]
-    x_2 = x_cur[2, :]
-    scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, aspect_ratio=:equal, label = legend = false)
-
-    display(plt)
-
-    for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i, txt_switch)
-
-        # println("this is state")
-        # println(state)
-        if i % 100 == 0
-            x_cur = reshape(state[4:3*(N+1)], (3, N))
-            # println("this is xcur")
-            # println(x_cur)
-
-            x_1 = x_cur[1, :]
-            x_2 = x_cur[2, :]
-
-            # println("this is x_1, x_2")
-            # println(x_1, x_2)
-            # if x_1[1] != NaN && x_2[1] != NaN
-            #     scatter!(plt, x_1, x_2, legend = false)
-            # end #cond
-
-            scatter!(plt, x_1, x_2, legend = false)
-            plot!(plt, x_1, x_2, legend = false, aspect_ratio=:equal,
-                title = "Open circle without twist")
-        end
-
-    # println("u =", state[1:3] )
-    end
-
-    println("this is f")
-    println(f)
-    #check below
-    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
-    println("sum(f) = ", sum(f))
-    display(plt)
-    png("test_circle_1")
-
-    println("%%%%%%%%%%%%%%%%%%% Circle, twist %%%%%%%%%%%%%%%%%%%")
-    txt_switch = "circle_w/_twist"
-
-    X = zeros(Float64, 3, 10)
+    init_pos = zeros(Float64, 3, 10)
     for i = 1:10
-        X[1, i] = 10 * cos(-2.0 * pi * (i - 1) / 10)
-        X[2, i] = 10 * sin(-2.0 * pi * (i - 1) / 10)
+        init_pos[1, i] = 10 * cos(-2.0 * pi * (i - 1) / 10)
+        init_pos[2, i] = 10 * sin(-2.0 * pi * (i - 1) / 10)
     end #for loop
-    N = 10
 
-    rad = 10
-    #l0 = sqrt(2*rad^2*(1-cos(2*pi/10)))
+    e_0 = normalize(init_pos[:, 2] - init_pos[:, 1])
+    l_i = init_pos[:, 2] - init_pos[:, 1]
+    vor = sqrt(l_i[1]^2 + l_i[2]^2)
 
-    # theta_0 = zeros(Float64, N)
-    theta_0 = [0.,1.,2.,3.,4.,5.,6.,7.,8.,9.]
-    e_0 = normalize(X[:, 2] - X[:, 1])
-    l_i = X[:, 2] - X[:, 1]
-    l0 = sqrt(l_i[1]^2 + l_i[2]^2)
-    # l0 = 1
-    param = [N, l0]
+    init_theta = [0.,1.,2.,3.,4.,5.,6.,7.,8.,9.]
+    init_norm = [e_0[2], -e_0[1], 0.0]
 
-    println("e_0 norm ", e_0'e_0 )
-
-    #change below ! fix
-    u_0 = [e_0[2], -e_0[1], 0.0]
-    # u_0 = [0., 0., 1.]
-    state_0 = vars2state(X, theta_0, u_0)
-
-    # tspan = (0.0, 500.0)
-    #BELOW:
-    # tspan = (0.0, 10^4 * 3)
-    # n_t = 10^4 * 3
-
-    tspan = (0.0, 10^2)
-    n_t = 10^2
-    dt = (tspan[2] - tspan[1]) / n_t
-
-    f = zeros(Float64, 4 * N)
-
-    plt = plot()
-    state = state_0[:]
-    x_cur = reshape(state[4:3*(N+1)], (3, N))
-    x_1 = x_cur[1, :]
-    x_2 = x_cur[2, :]
-    x_3 = x_cur[3, :]
-    scatter!(plt, x_1, x_2, label = legend = false)
-    plot!(plt, x_1, x_2, aspect_ratio=:equal, label = legend = false)
-
-    display(plt)
-
-    for i = 1:n_t
-        state = timestep(F!, f, state, dt, param, i, txt_switch)
-
-        # println("this is state")
-        # println(state)
-        if i % 100 == 0
-            x_cur = reshape(state[4:3*(N+1)], (3, N))
-            # println("this is xcur")
-            # println(x_cur)
-
-            x_1 = x_cur[1, :]
-            x_2 = x_cur[2, :]
-            # println("theta =", state[3N+4:end])
-
-            # println("this is x_1, x_2")
-            # println(x_1, x_2)
-            # if x_1[1] != NaN && x_2[1] != NaN
-            #     scatter!(plt, x_1, x_2, legend = false)
-            # end #cond
-
-            scatter!(plt, x_1, x_2, legend = false)
-            plot!(plt, x_1, x_2, legend = false, aspect_ratio=:equal,
-                title = "Open circle with twist")
-        end
-
-    # println("u =", state[1:3] )
-    end
-
-    println("this is f")
-    println(f)
-    #check below
-    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
-    println("sum(f) = ", sum(f))
-    display(plt)
-    png("test_circle_2_twist")
-
-    # scene = Scene()
-    #
-    # state = state_0[:]
-    # x_cur = reshape(state[4:3*(N+1)], (3, N))
-    # x_1 = x_cur[1, :]
-    # x_2 = x_cur[2, :]
-    # scene = lines(x_cur[1:2,:], color = :blue)
-    # scatter!(scene, x_cur[1:2,:], color = :blue, markersize = 0.1)
-    #
-    # timestep(F!, f, state, dt, param ,1)
-    #
-    # record(scene, "line_changing_colour.mp4", 1:n_t; framerate = 30) do i
-    #     state = timestep(F!, f, state, dt, param, i)
-    #     x_cur[] = reshape(state[4:3*(N+1)], (3, N))
-    #     #x_1 = x_cur[1, :]
-    #     # x_2 = x_cur[2, :]
-    #     # lines!(scene, x_1, x_2)
-    #     # scatter!(scene, x_1, x_2)
-    # end every 5
+    runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
+            init_pos, init_theta, init_norm)
 
 end
 
