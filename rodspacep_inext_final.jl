@@ -6,7 +6,8 @@
 ##
 ## ISSUES
 # 1. Fix coloring
-#
+# 2. Check gradient
+# 3. Convert from Plots ==> matplotlib
 ##
 ## CURRENTLY
 # check "Resolving Issues.txt"
@@ -147,14 +148,14 @@ function timestep(
     n = Int(param[1])
     l0 = param[2]
     x, theta, u0 = state2vars(state, n)
-    init_state = state
+    init_state = state[4:end]
 
     q_i = vcat(vec(x), theta)
     tangent0 = LinearAlgebra.normalize!(q_i[4:6] - q_i[1:3])
 
     # Compute explicit initial guess for X, theta at t+dt
 
-    #RK 2
+    #RK 4
     F!(f, q_i, u0, param)
 
     q_g = (dt / 2) * f + q_i
@@ -448,7 +449,7 @@ function timestep(
     # println("delta", fin_proj - init)
 
     #calculating final f
-    f_prop = (fin_proj - init_state)/dt
+    f_prop = (fin_proj[4:end] - init_state)/dt
 
     #writing to text file
 
@@ -615,12 +616,8 @@ function runsim(
 
         plt = plot()
 
-        scatter!(plt, x_cur[1,1], x_cur[2,1],
-                label = legend = false,
-                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[1]])
-
         for i = 1:N-1
-            scatter!(plt, x_cur[1,i+1], x_cur[2,i+1],
+            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
                     label = legend = false)
             plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
                     label = legend = false,
@@ -635,6 +632,7 @@ function runsim(
     end every 1
     gif(anim, string(title,".gif"), fps = 25)
 
+    #force/torque checks
     println(f)
     println("check sum ", isapprox(sum(f), 0., atol=1e-4))
     println("sum(f) = ", sum(f))
@@ -644,46 +642,6 @@ function runsim(
     display(plt)
     println("u =", state[1:3])
     png(title)
-
-    # for i = 1:n_t
-    #     state = timestep(F!, f, state, dt, param, i, txt_array, err_tol)
-    #
-    #     x_cur = reshape(state[4:3*(N+1)], (3, N))
-    #     # println("theta =", state[3N+4:end])
-    #
-    #     theta_cur = state[3*(N+1) + 1:end]
-    #     twist_weights = twist_color(theta_cur)
-    #
-    #     for i = 1:N-1
-    #         hand_switch = 0
-    #
-    #         avg1 = (twist_weights[i] + twist_weights[i+1])  / 2
-    #         avg2 = mod(avg1 + 0.5,1)
-    #
-    #         #FIX BELOW
-    #         delta_avg1 = abs(avg1 - (twist_weights[i+1]))
-    #         delta_avg2 = abs(avg2 - (twist_weights[i+1]))
-    #
-    #         if delta_avg1 < delta_avg2
-    #             fin_twist_weights[i] = avg1
-    #         else
-    #             fin_twist_weights[i] = avg2
-    #         end #conditional
-    #
-    #     end #loop
-    #
-    #     for i = 1:N-1
-    #         scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
-    #                 label = legend = false)
-    #         plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
-    #                 label = legend = false,
-    #                 linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[fin_twist_weights[i]])
-    #     end #for
-    # end #for loop
-
-    #force/torque checks
-
-
 
 end #function
 
@@ -708,7 +666,7 @@ function main()
     name = "bend_wo_twist"
     dim = 2
     error_tolerance_C = 10^-6
-    timespan = (0.,5.)
+    timespan = (0.,0.3)
     num_tstep = 1000
     N_v = 3
     vor = 1.
