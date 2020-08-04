@@ -1,3 +1,16 @@
+##
+## Test for the DiffEq solver
+##
+##
+
+##
+## ISSUES
+# 1. Fix x2 gradient checks
+#
+##
+## CODE
+#
+#
 
 using DifferentialEquations
 using Flux
@@ -260,12 +273,14 @@ function energy_clean(
 end # function
 
 
-function state2vars(state::Array{Float64,2})
-    x = state[1:3, 2:end]
-    theta = state[4, 2:end-1]
-    u0 = state[1:3, 1]
-    return (x, theta, u0)
-end
+#not sure why below is still in code?
+
+# function state2vars(state::Array{Float64,2})
+#     x = state[1:3, 2:end]
+#     theta = state[4, 2:end-1]
+#     u0 = state[1:3, 1]
+#     return (x, theta, u0)
+# end
 
 function vars2state(
     x::Array{Float64},
@@ -379,7 +394,35 @@ function force_b(ϕ, theta, norm, param)
     return [f_11,f_12,f_13],fx[:,1]
 end #function
 
-println("this is hand calc vs. fx, bent ϕ_1")
+# function force_b2(ϕ, theta, norm, param)
+#
+#     p0 = [0 1 1+cos(ϕ); 0 0 sin(ϕ); 0 0 0]
+#
+#     Ex = x -> energy_clean(x, theta,norm, param)
+#     fx = -1.0 * Flux.gradient(Ex, p0)[1]
+#
+#     f_22 = (4sin(ϕ)/(1 + cos(ϕ))^2) * ((sin(ϕ)/2) - 2) * 0.5 #!!! fix !!!
+#     f_21 = (4sin(ϕ)/(1 + cos(ϕ))^2) * ((sin(ϕ)/2) - 2) * -0.5 #!!! fix !!!
+#     f_23 = 0
+#
+#     return [f_21,f_22,f_23],fx[:,2]
+# end #function
+
+function force_b2(ϕ, theta, norm, param)
+
+    p0 = [0 1 1+cos(ϕ); 0 0 sin(ϕ); 0 0 0]
+
+    Ex = x -> energy_clean(x, theta,norm, param)
+    fx = -1.0 * Flux.gradient(Ex, p0)[1]
+
+    f_22 = 0
+    f_21 = -(((4*(sin(ϕ))^2)/(1 + cos(ϕ))^2) - (((sin(ϕ))^2)/(1 + cos(ϕ))^2)*(1 - cos(ϕ)))
+    f_23 = 0
+
+    return f_21,fx[1,2]
+end #function
+
+println("this is hand calc vs. fx, bent ϕ_1, x1 + x3")
 
 for i = 1:90
 
@@ -387,6 +430,12 @@ for i = 1:90
 
 end #for
 
+#requires lots of fixing
+println("this is hand calc vs. fx, bent ϕ_1, x2")
+
+for i = 1:90
+    println(force_b2(i * pi/180, [0.,0.,0.], [0.,0.,1.],[3,1]))
+end #for
 
 
 """
