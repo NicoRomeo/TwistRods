@@ -379,6 +379,21 @@ TESTING FLUX.GRADIENT, SERIES
 println("%%%%%%%%%%%%%%%%%%%%%% FLUX GRADIENT, SERIES%%%%%%%%%%%%%%%%%%%%%%%%%")
 
 #everything in radians
+function skewmat(a::Array{Float64})
+    return [0 -a[3] a[2]; a[3] 0 -a[1]; -a[2] a[1] 0]
+end # function
+
+"""
+    rotab(a, b, c)
+
+rotation matrix sending unit vectors a to b, applied to c
+"""
+function rotab(a::Array{Float64,1}, b::Array{Float64,1}, c::Array{Float64,1})
+    axb = cross(a, b)
+    V = skewmat(axb)
+    u = c + cross(axb, c) + V*V * c / (1 + dot(a, b))
+    return u
+end # function
 
 function force_b(ϕ, theta, norm, param)
 
@@ -387,11 +402,17 @@ function force_b(ϕ, theta, norm, param)
     Ex = x -> energy_clean(x, theta,norm, param)
     fx = -1.0 * Flux.gradient(Ex, p0)[1]
 
-    f_12 = -4*(sin(ϕ)/(1 + cos(ϕ))^2)
-    f_11 = -(sin(ϕ)/(1 + cos(ϕ)))^2
-    f_13 = 0
+    e1 = [1.; 0.; 0.]
+    e2 = [cos(ϕ); sin(ϕ); 0]
 
-    return [f_11,f_12,f_13],fx[:,1]
+    f_1 = zeros(3)
+    f_1[2] = -4*(sin(ϕ)/(1 + cos(ϕ))^2)
+    f_1[1] = -(sin(ϕ)/(1 + cos(ϕ)))^2
+    f_1[3] = 0
+
+    f_3 = rotab(e1,e2,f_1)
+
+    return f_1,fx[:,1], f_3, fx[:,3]
 end #function
 
 # function force_b2(ϕ, theta, norm, param)
@@ -415,27 +436,67 @@ function force_b2(ϕ, theta, norm, param)
     Ex = x -> energy_clean(x, theta,norm, param)
     fx = -1.0 * Flux.gradient(Ex, p0)[1]
 
-    f_22 = 0
     f_21 = -(((4*(sin(ϕ))^2)/(1 + cos(ϕ))^2) - (((sin(ϕ))^2)/(1 + cos(ϕ))^2)*(1 - cos(ϕ)))
+    f_22 = tan((ϕ + pi)/2) * f_21
     f_23 = 0
 
-    return f_21,fx[1,2]
+
+    return [f_21, f_22, f_23],fx[:,2]
 end #function
 
 println("this is hand calc vs. fx, bent ϕ_1, x1 + x3")
 
-for i = 1:90
 
-    println(force_b(i * pi/180, [0.,0.,0.], [0.,1.,0.],[3,1]))
 
+hand_x1, hand_x2, hand_x3 = zeros(3,179), zeros(3,179), zeros(3,179)
+julia_x1, julia_x2, julia_x3 = zeros(3,179), zeros(3,179), zeros(3,179)
+
+#x1
+
+
+for i = 1:179
+    hand_x1[:,i] = force_b(i * pi/180, [0.,0.,0.], [0.,1.,0.],[3,1])[1]
+    julia_x1[:,i] = force_b(i * pi/180, [0.,0.,0.], [0.,1.,0.],[3,1])[2]
+    hand_x3[:,i] = force_b(i * pi/180, [0.,0.,0.], [0.,1.,0.],[3,1])[3]
+    julia_x3[:,i] = force_b(i * pi/180, [0.,0.,0.], [0.,1.,0.],[3,1])[4]
 end #for
+
+f_x1_checks = plot()
+plot!(hand_x1[1,:], julia_x1[1,:])
+plot!(hand_x1[2,:], julia_x1[2,:])
+plot!(hand_x1[3,:], julia_x1[3,:])
+title!("x1 gradient checks")
+display(f_x1_checks)
+
+f_x3_checks = plot()
+plot!(hand_x3[1,:], julia_x3[1,:])
+plot!(hand_x3[2,:], julia_x3[2,:])
+plot!(hand_x3[3,:], julia_x3[3,:])
+title!("x3 gradient checks")
+display(f_x3_checks)
+
+#x2
+f_x2_checks = plot()
+
+for i = 1:179
+    hand_x2[:,i] = force_b2(i * pi/180, [0.,0.,0.], [0.,1.,0.],[3,1])[1]
+    julia_x2[:,i] = force_b2(i * pi/180, [0.,0.,0.], [0.,1.,0.],[3,1])[2]
+end #for
+
+f_x2_checks = plot()
+plot!(hand_x2[1,:], julia_x2[1,:])
+plot!(hand_x2[2,:], julia_x2[2,:])
+plot!(hand_x2[3,:], julia_x2[3,:])
+title!("x2 gradient checks")
+display(f_x2_checks)
+
 
 #requires lots of fixing
 println("this is hand calc vs. fx, bent ϕ_1, x2")
 
-for i = 1:90
-    println(force_b2(i * pi/180, [0.,0.,0.], [0.,0.,1.],[3,1]))
-end #for
+# for i = 1:90
+#     println(force_b2(i * pi/180, [0.,0.,0.], [0.,0.,1.],[3,1]))
+# end #for
 
 
 """
