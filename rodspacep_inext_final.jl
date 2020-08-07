@@ -305,7 +305,12 @@ function timestep(
 
     #init C
     C = constraint(x)
-    maxC = maximum(C)
+    C_abs = zeros(n-1)
+
+    for i= 1:n-1
+        C_abs[i] = abs(C[i])
+    end #for
+    maxC = maximum(C_abs)
 
     vor_len = vor_length(x)
 
@@ -321,7 +326,7 @@ function timestep(
     iteration = 1
 
     # while maxC >= err_tol || maxC <= -err_tol
-    while maxC >= 10^-4 || maxC <= -10^-4
+    while maxC >= 10^-4
         #vectorize
         x = vec(x)
 
@@ -377,7 +382,12 @@ function timestep(
 
         #initializing C
         C = constraint(x)
-        maxC = maximum(C)
+        C_abs = zeros(n-1)
+
+        for i= 1:n-1
+            C_abs[i] = abs(C[i])
+        end #for
+        maxC = maximum(C_abs)
 
         #initializing vor length
         vor_len = vor_length(x)
@@ -438,21 +448,11 @@ function timestep(
     fin_proj[1:3] = u_fin_proj
     fin_proj[4:3n+3] = x_fin_proj
     fin_proj[3n+4:end] = theta_proj
-    #
-    # println("u_fin dim")
-    # println(size(u_fin_proj))
-    #
-    # println("x_fin dim")
-    # println(size(x_fin_proj))
-
-    # println("fin_proj", fin_proj)
-    # println("delta", fin_proj - init)
 
     #calculating final f
     f_prop = (fin_proj[4:end] - init_state)/dt
 
     #writing to text file
-
     io = open(txt_array[1], "a")
     # write(io, maxC, "\n")
     # C = constraint(x)
@@ -556,24 +556,6 @@ function runsim(
     x_1 = x_cur[1, :]
     x_2 = x_cur[2, :]
     twist_weights = twist_color(theta_0)
-    fin_twist_weights = zeros(N-1)
-
-    for i = 1:N-1
-        hand_switch = 0
-
-        avg1 = (twist_weights[i] + twist_weights[i+1])  / 2
-        avg2 = mod(avg1 + 0.5,1)
-
-        delta_avg1 = abs(avg1 - (twist_weights[i+1]))
-        delta_avg2 = abs(avg2 - (twist_weights[i+1]))
-
-        if delta_avg1 < delta_avg2
-            fin_twist_weights[i] = avg1
-        else
-            fin_twist_weights[i] = avg2
-        end #conditional
-
-    end #loop
 
     #initializing plot
     for i = 1:N-1
@@ -581,7 +563,7 @@ function runsim(
                 label = legend = false)
         plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
                 label = legend = false,
-                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[fin_twist_weights[i]])
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
     end #for loop
 
     title!(title)
@@ -597,23 +579,6 @@ function runsim(
         theta_cur = state[3*(N+1) + 1:end]
         twist_weights = twist_color(theta_cur)
 
-        for i = 1:N-1
-            hand_switch = 0
-
-            avg1 = (twist_weights[i] + twist_weights[i+1])  / 2
-            avg2 = mod(avg1 + 0.5,1)
-
-            #FIX BELOW
-            delta_avg1 = abs(avg1 - (twist_weights[i+1]))
-            delta_avg2 = abs(avg2 - (twist_weights[i+1]))
-
-            if delta_avg1 < delta_avg2
-                fin_twist_weights[i] = avg1
-            else
-                fin_twist_weights[i] = avg2
-            end #conditional
-        end #for
-
         plt = plot()
 
         for i = 1:N-1
@@ -621,7 +586,7 @@ function runsim(
                     label = legend = false)
             plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
                     label = legend = false,
-                    linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[fin_twist_weights[i]])
+                    linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
         end #for
 
         title!(title)
