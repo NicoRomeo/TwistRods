@@ -496,7 +496,8 @@ function runsim(
     l0,
     pos_0,
     theta_0,
-    u_0
+    u_0,
+    lims
 )
     println("%%%%%%%%%%%%", title, "%%%%%%%%%%%%%%%")
 
@@ -550,7 +551,10 @@ function runsim(
 
     f = zeros(Float64, 4 * N)
 
-    plt = plot()
+    plt = plot(aspect_ratio=:equal)
+    xlims!(lims[1])
+    ylims!(lims[2])
+    zlims!(lims[1])
     state = state_0[:]
     x_cur = reshape(state[4:3*(N+1)], (3, N))
     x_1 = x_cur[1, :]
@@ -559,9 +563,9 @@ function runsim(
 
     #initializing plot
     for i = 1:N-1
-        scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+        scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],x_cur[3,i:i+1],
                 label = legend = false)
-        plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+        plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
                 label = legend = false,
                 linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
     end #for loop
@@ -579,12 +583,14 @@ function runsim(
         theta_cur = state[3*(N+1) + 1:end]
         twist_weights = twist_color(theta_cur)
 
-        plt = plot()
-
+        plt = plot(aspect_ratio=:equal)
+        xlims!(lims[1])
+        ylims!(lims[2])
+        zlims!(lims[1])
         for i = 1:N-1
-            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
                     label = legend = false)
-            plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],
+            plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1],x_cur[3,i:i+1],
                     label = legend = false,
                     linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
         end #for
@@ -595,7 +601,7 @@ function runsim(
     anim = @animate for i = 1:n_t
         step!()
     end every 1
-    gif(anim, string(title,".gif"), fps = 25)
+    gif(anim, string(title,".gif"), fps = (Int(floor(n_t/5))))
 
     #force/torque checks
     println(f)
@@ -611,7 +617,7 @@ function runsim(
 end #function
 
 function main()
-
+    buff = 1.0
     #twist_straight
     name = "twist_straight"
     dim = 2
@@ -623,9 +629,12 @@ function main()
     init_pos = [0. 1. 2. 3. 4.; 0. 0. 0. 0. 0.; 0. 0. 0. 0. 0.]
     init_theta = [0., 1.0, 2.0, 3., 4.]
     init_norm = [0.0, 1.0, 0.0]
+    lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
+            (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
+            (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
 
     runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
-            init_pos, init_theta, init_norm)
+            init_pos, init_theta, init_norm, lims)
 
     #bend w/o twist
     name = "bend_wo_twist"
@@ -638,9 +647,12 @@ function main()
     init_pos = [1. 0. 0.; 0. 0. 1.; 0. 0. 0.]
     init_theta = [0., 0., 0.]
     init_norm = [0.0, 1.0, 0.0]
+    lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
+            (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
+            (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
 
     runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
-            init_pos, init_theta, init_norm)
+            init_pos, init_theta, init_norm, lims)
 
     #bend w/ twist
     name = "bend_w_twist"
@@ -650,12 +662,16 @@ function main()
     num_tstep = 1000
     N_v = 3
     vor = 1.
-    init_pos = [1. 0. 0.; 0. 0. 1.; 0. 0. 0.]
+    # init_pos = [1. 0. 0.; 0. 0. 1.; 0. 0. 0.]
+    init_pos = [1. 0. 0.; 0. 0. 0.; 0. 0. 1.]
     init_theta = [0., 1.0, 2.0]
     init_norm = [0.0, 1.0, 0.0]
+    lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
+            (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
+            (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
 
     runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
-            init_pos, init_theta, init_norm)
+            init_pos, init_theta, init_norm, lims)
 
     #circle w/o twist
     name = "circle_wo_twist"
@@ -677,16 +693,19 @@ function main()
 
     init_theta = zeros(Float64, N_v)
     init_norm = [e_0[2], -e_0[1], 0.0]
+    lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
+            (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
+            (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
 
     runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
-            init_pos, init_theta, init_norm)
+            init_pos, init_theta, init_norm, lims)
 
     #circle w/ twist
     name = "circle_w_twist"
     dim = 2
     error_tolerance_C = 10^-6
-    timespan = (0.,10.)
-    num_tstep = 100
+    timespan = (0.,10^4)
+    num_tstep = 10^3
     N_v = 10
 
     init_pos = zeros(Float64, 3, 10)
@@ -701,9 +720,12 @@ function main()
 
     init_theta = [0.,1.,2.,3.,4.,5.,6.,7.,8.,9.]
     init_norm = [e_0[2], -e_0[1], 0.0]
+    lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
+            (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
+            (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
 
     runsim(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
-            init_pos, init_theta, init_norm)
+            init_pos, init_theta, init_norm, lims)
 
 end
 
