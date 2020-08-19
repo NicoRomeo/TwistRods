@@ -16,8 +16,8 @@ using ColorSchemes
 #using Flux
 using Zygote
 using LinearAlgebra
-using NLsolve
 using DelimitedFiles
+using IterativeSolvers
 
 include("newrod.jl")
 ## Functions to access states and back
@@ -114,6 +114,8 @@ end # function
 function F!(f::Array{Float64,1}, q::Array{Float64,1}, u0, param)
     E = mu -> energy_q(mu, u0, param)
     f[:] = -1.0 * Zygote.gradient(E, q)[1]
+
+    # println("f: ", f)
 end
 
 """
@@ -316,7 +318,7 @@ function timestep(
         gradC[n+3,end] = 2 * (theta_proj[end] - 0.9)
 
         # gradC = Zygote.gradient(constraint, x)
-
+        # println("this is gradC: ", gradC)
         #solving for lagrange multipliers
         # println("gradC: ", gradC)
         gradC_t = transpose(gradC)
@@ -327,9 +329,9 @@ function timestep(
         fin_det = det(G)
 
         # println("fin_det: ", fin_det)
-        G_inv = pinv(G) #check runtime
+        # G_inv = pinv(G) #check runtime
 
-        δλ = G_inv * C
+        δλ = IterativeSolvers.lsmr(G,C)
         δλ_next = δλ / dt^2
         δx_next = -dt^2 * (M_inv * gradC_t * δλ_next)
 
@@ -425,7 +427,7 @@ function timestep(
     close(io)
 
     io = open(txt_array[3], "a")
-    writedlm(io, sum(f_prop))
+    writedlm(io, f_prop)
     write(io, "________\n")
     close(io)
 
@@ -504,6 +506,13 @@ function timestep_axis(
 
     # println("last f: ", f)
     x_fin = q_i + (1/6 * dt * (k1 + 2k2 + 2k3 + k4))
+
+    # v = l0
+    # fin_first= fixed_ends[1]  + (gen_t * v) * [1.;0.;0.]
+    # fin_last = fixed_ends[2] - (gen_t * v) * [1.;0.;0.]
+    # x_fin[1:3] = fin_first
+    # x_fin[3n-2:3n] = fin_last
+
     e_fin = LinearAlgebra.normalize!(x_fin[4:6] - x_fin[1:3])
     u_fin = rotab(tangent0, e_fin, u0)
 
@@ -588,12 +597,16 @@ function timestep_axis(
             gradC[r, 3*(r-1)+4:3*(r-1)+6] = 2 * edges[:,r]
         end #for
 
+        #gradC[1,1:3] = zeros(3)
+        # gradC[1,4:6] = 2 * (edges[:,1] - fixed_ends[1]  + (gen_t * v) * [1.;0.;0.])
+        #gradC[n-1, 3n-2:3n] = zeros(3)
+
         # for r = 1:n
         #     gradC[r, 3*(r-4)+1:3*(r-4)+3] = -2 * edges[:,r-3]
         #     gradC[r, 3*(r-4)+4:3*(r-4)+6] = 2 * edges[:,r-3]
         # end #for
 
-        v = l0/10 #v = velocity
+        v = l0 #v = velocity
         # adj_t = gen_t * 10000
 #         C_fin[n] = dot(x_inp[:,1] - (start1  + (adj_t * v) * [1;0;0]),x_inp[:,1] - (start1  + (adj_t * v)* [1;0;0])) #note first vertex initializes @ origin
 #         C_fin[n+1] = dot(x_inp[:,end] - (end1 - (adj_t * v) * [1;0;0]), x_inp[:,end] - (end1 - (adj_t * v) * [1;0;0]))
@@ -601,11 +614,13 @@ function timestep_axis(
 #         C_fin[n+3] = (theta_inp[end] - 0.9)^2
 #
 # fixed_ends[1], fixed_ends[2]
+        trunc_len = 0.8
+        total_theta = 5*pi
 
-        fin_first= fixed_ends[1]  + (gen_t * v) * [1.;0.;0.]
-        fin_last = fixed_ends[2] - (gen_t * v) * [1.;0.;0.]
+        fin_first= fixed_ends[1]  + (gen_t * v) * [0.;0.;0.]
+        fin_last = fixed_ends[2] - (gen_t * v) * [trunc_len;0.;trunc_len/5]
 
-        println("fin_first, fin_last", fin_first, fin_last)
+        # println("fin_first, fin_last", fin_first, fin_last)
 
         #2
         gradC[n, 1:3] = 2 * (x[1:3] - fin_first)
@@ -613,7 +628,7 @@ function timestep_axis(
 
         #theta ==> changed
         gradC[n+2,3n+1] = 2 * (theta_proj[1] - 0.)
-        gradC[n+3,end] = 2 * (theta_proj[end] - 0.9)
+        gradC[n+3,end] = 2 * (theta_proj[end] - total_theta)
 
         # gradC = Zygote.gradient(constraint, x)
 
@@ -627,9 +642,9 @@ function timestep_axis(
         fin_det = det(G)
 
         # println("fin_det: ", fin_det)
-        G_inv = pinv(G) #check runtime
+        # G_inv = pinv(G) #check runtime
 
-        δλ = G_inv * C
+        δλ = IterativeSolvers.lsmr(G,C)
         δλ_next = δλ / dt^2
         δx_next = -dt^2 * (M_inv * gradC_t * δλ_next)
 
@@ -725,7 +740,7 @@ function timestep_axis(
     close(io)
 
     io = open(txt_array[3], "a")
-    writedlm(io, sum(f_prop))
+    writedlm(io, f_prop)
     write(io, "________\n")
     close(io)
 
@@ -814,11 +829,12 @@ function runsim_twist(
     # println(twist_weights)
     #initializing plot
     for i = 1:N-1
-        scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
-                label = legend = false, aspect_ratio=:equal)
-        plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
-                label = legend = false, aspect_ratio=:equal,
-                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
+        # scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
+        #         label = legend = false, aspect_ratio=:equal)#
+        plot!(plt, x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
+                label = legend = false, aspect_ratio=:equal,#
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+                linewidth = 2)
     end #for loop
 
     title!(title)
@@ -849,10 +865,10 @@ function runsim_twist(
         theta_cur = state[3*(N+1) + 1:end]
         twist_weights = twist_color(theta_cur)
 
-        println("dt: ", t)
-        println("this is theta, timsetp 1: ", theta_cur)
-        println("this is x, timsetp 1: ", x_cur)
-        println("************** * * * BOINK *8*** *8**88   8 ")
+        # println("dt: ", t)
+        # println("this is theta, timsetp 1: ", theta_cur)
+        # println("this is x, timsetp 1: ", x_cur)
+        # println("************** * * * BOINK *8*** *8**88   8 ")
 
         # println(twist_weights)
 
@@ -861,12 +877,12 @@ function runsim_twist(
         ylims!(limits[2])
         zlims!(limits[3])
         for i = 1:N-1
-            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
-                    label = legend = false)
-            plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
-                    label = legend = false,
+            # scatter!(plt, x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
+            #         label = legend = false) #
+            plot!(plt, x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
+                    label = legend = false,linewidth = 2,
                     linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
-        end #for
+        end #for  #
 
         title!(title)
     end #function
@@ -874,16 +890,16 @@ function runsim_twist(
     t = 0.
     anim = @animate for i = 1:n_t
         step!(t)
-    end every 1
-    gif(anim, string(title,".gif"), fps = (Int(floor(n_t/5))))
+    end every 5
+    gif(anim, string(title,".gif"), fps = Int(floor(n_t/5)))
 
     #force/torque checks
-    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
-    println("sum(f_bend) = ", sum(f[1:3N]))
-    println("sum(f_twist) = ", sum(f[3N+1:4N]))
-
-    display(plt)
-    println("u =", state[1:3])
+    # println("check sum ", isapprox(sum(f), 0., atol=1e-4))
+    # println("sum(f_bend) = ", sum(f[1:3N]))
+    # println("sum(f_twist) = ", sum(f[3N+1:4N]))
+    #
+    # display(plt)
+    # println("u =", state[1:3])
     png(title)
 
     return state
@@ -957,12 +973,12 @@ function runsim_axis(
     # println(twist_weights)
     #initializing plot
     for i = 1:N-1
-        scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
-                label = legend = false)
-        plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
-                label = legend = false,
+        # scatter!(plt,  x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
+        #         label = legend = false) #
+        plot!(plt, x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
+                label = legend = false, linewidth = 2,
                 linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
-    end #for loop
+    end #for loop #
 
     title!(title)
     display(plt)
@@ -982,7 +998,7 @@ function runsim_axis(
         state = timestep_axis(F!, f, state, dt, param, txt_array, err_tol,
                         [pos_0[:,1],pos_0[:,end]], constraint_type, gen_t)
         t += dt
-        println(t)
+        # println(t)
         # state_0 = vars2state(pos_0, theta_0, u_0)
         # x, theta, u_0 = state2vars(state_0, N)
 
@@ -992,10 +1008,10 @@ function runsim_axis(
         theta_cur = state[3*(N+1) + 1:end]
         twist_weights = twist_color(theta_cur)
 
-        println("dt: ", t)
-        println("this is theta, timsetp 1: ", theta_cur)
-        println("this is x, timsetp 1: ", x_cur)
-        println("************** * * * BOINK *8*** *8**88   8 ")
+        # println("dt: ", t)
+        # println("this is theta, timsetp 1: ", theta_cur)
+        # println("this is x, timsetp 1: ", x_cur)
+        # println("************** * * * BOINK *8*** *8**88   8 ")
 
         # println(twist_weights)
 
@@ -1004,12 +1020,12 @@ function runsim_axis(
         ylims!(limits[2])
         zlims!(limits[3])
         for i = 1:N-1
-            scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
-                    label = legend = false)
-            plot!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
-                    label = legend = false,
+            # scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
+            #         label = legend = false) #
+            plot!(plt,  x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
+                    label = legend = false, linewidth = 2,
                     linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
-        end #for
+        end #for #
 
         title!(title)
     end #function
@@ -1017,13 +1033,13 @@ function runsim_axis(
     t = 0.
     anim = @animate for i = 1:n_t
         step!(t)
-    end every 1
-    gif(anim, string(title,".gif"), fps = (Int(floor(n_t/5))))
+    end every 5
+    gif(anim, string(title,".gif"), fps = 100)
 
     #force/torque checks
-    println("check sum ", isapprox(sum(f), 0., atol=1e-4))
-    println("sum(f_bend) = ", sum(f[1:3N]))
-    println("sum(f_twist) = ", sum(f[3N+1:4N]))
+    # println("check sum ", isapprox(sum(f), 0., atol=1e-4))
+    # println("sum(f_bend) = ", sum(f[1:3N]))
+    # println("sum(f_twist) = ", sum(f[3N+1:4N]))
 
     display(plt)
     println("u =", state[1:3])
@@ -1110,12 +1126,14 @@ function constraint_axis(x_inp, theta_inp, vor1, start1, end1, t_cur)
     # C_fin[end-2:end] = x_inp[:,end] - end1
     # C_fin[1:n-1] = C
 
-    v = vor1/10 #v = velocity
+    v = vor1 #v = velocity
+    trunc_len = 0.8
+    total_theta = 5*pi
 
-    C_fin[n] = dot(x_inp[:,1] - (start1  + (v * t_cur) * [1.;0.;0.]),x_inp[:,1] - (start1  + (v * t_cur)* [1.;0.;0.])) #note first vertex initializes @ origin
-    C_fin[n+1] = dot(x_inp[:,end] - (end1 - (v * t_cur) * [1.;0.;0.]), x_inp[:,end] - (end1 - (v * t_cur) * [1.;0.;0.]))
+    C_fin[n] = dot(x_inp[:,1] - (start1  + (v * t_cur) * [0.;0.;0.]),x_inp[:,1] - (start1  + (v * t_cur)* [0.;0.;0.])) #note first vertex initializes @ origin
+    C_fin[n+1] = dot(x_inp[:,end] - (end1 - (v * t_cur) * [trunc_len;0.;trunc_len/5]), x_inp[:,end] - (end1 - (v * t_cur) * [trunc_len;0.;trunc_len/5]))
     C_fin[n+2] = (theta_inp[1])^2
-    C_fin[n+3] = (theta_inp[end] - 0.9)^2
+    C_fin[n+3] = (theta_inp[end] - total_theta)^2
 
     C_fin[1:n-1] = C
 
@@ -1157,34 +1175,76 @@ function main()
 
     name = "buckle_1_twisting_rod"
     dim = 3
-    error_tolerance_C = 10^-6
+    error_tolerance_C = 10^-5
     timespan = (0.,1.)
     num_tstep = 10
     N_v = 10
     vor = 1.
     init_pos = [0. 1. 2. 3. 4. 5. 6. 7. 8. 9.; 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.;
                 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
-    # init_theta = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    init_theta = [0., 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7]
+    init_theta = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    # init_theta = [0., 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7]
     init_norm = [0.0, 1.0, 0.0]
+    lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
+            (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
+            (minimum(init_pos[3,:]) - 3 * buff, maximum(init_pos[3,:]) + 3 * buff)]
+
+    new_state = runsim_twist(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
+             init_pos, init_theta, init_norm,
+             constraint_twist, lims)
+
+    #bringing ends together
+    # name = "buckle_2_axial_t"
+    # dim = 3
+    # error_tolerance_C = 10^-2
+    # timespan = (0.,1.)
+    # num_tstep = 10^3
+    # N_v = 10
+    # vor = 1.
+    # init_pos, init_theta, init_norm = state2vars(new_state, N_v)
+    # # init_pos = [0. 1. 2. 3. 4. 5. 6. 7. 8. 9.; 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.;
+    # #            0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+    # # init_theta = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    # # init_theta = [0., 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7]
+    # # init_norm = [0.0, 1.0, 0.0]
+    # runsim_axis(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
+    #         init_pos, init_theta, init_norm,
+    #         constraint_axis, lims)
+
+    buff = 5
+    name = "buckle_2_axial_t_big"
+    dim = 3
+    error_tolerance_C = 10^-2
+    timespan = (0.,5.)
+    num_tstep = 10^3*3
+    N_v = 25
+    vor = 1.
+
+    init_pos = zeros(3,N_v)
+    init_theta = zeros(N_v)
+    init_norm = [0.0, 1.0, 0.0]
+
+    tot_tw = 5*pi
+    for i = 1:N_v
+        init_pos[:,i] = [vor*i, 0., 0.]
+        init_theta[i] = tot_tw/N_v * i
+    end #loop
+
     lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
             (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
             (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
 
-    new_state = runsim_twist(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
-            init_pos, init_theta, init_norm,
-            constraint_twist, lims)
+    #
+    # init_pos = [0. 1. 2. 3. 4. 5. 6. 7. 8. 9.; 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.;
+    #             0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+    # init_theta = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    # # init_theta = [0., 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7]
 
-    #bringing ends together
-    name = "buckle_2_axial_t"
-    dim = 3
-    error_tolerance_C = 10^-3
-    timespan = (0.,1.)
-    num_tstep = 10^2
-    N_v = 10
-    vor = 1.
-    init_pos, init_theta, init_norm = state2vars(new_state, N_v)
-
+    # init_pos = [0. 1. 2. 3. 4. 5. 6. 7. 8. 9.; 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.;
+    #            0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+    # init_theta = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    # init_theta = [0., 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7]
+    # init_norm = [0.0, 1.0, 0.0]
     runsim_axis(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
             init_pos, init_theta, init_norm,
             constraint_axis, lims)
