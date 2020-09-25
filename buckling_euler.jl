@@ -49,7 +49,7 @@ function energy_q(q, u0::Array{Float64,1}, p)
     Etwist = 0.0
     s = sqrt(edges'edges) - l0
     Estretch = s's
-    i= 1
+    i = 1
     while i < n - 1
         edges_1 = q[3*(i+1)+1:3*(i+2)] - q[3*i+1:3*(i+1)]
         tangent_1 = normd(edges_1)
@@ -102,7 +102,7 @@ rotation matrix sending unit vectors a to b, applied to c
 function rotab(a::Array{Float64,1}, b::Array{Float64,1}, c::Array{Float64,1})
     axb = cross(a, b)
     V = skewmat(axb)
-    u = c + cross(axb, c) + V*V * c / (1 + dot(a, b))
+    u = c + cross(axb, c) + V * V * c / (1 + dot(a, b))
     return u
 end # function
 
@@ -124,14 +124,14 @@ function vor_length(x_inp)
     n = size(x_inp)[1] / 3
     n = Int(n)
 
-    x_inp = reshape(x_inp,(3,n))
+    x_inp = reshape(x_inp, (3, n))
     edges = x_inp[:, 2:end] - x_inp[:, 1:end-1]
 
-    vl = zeros(n-1) #1 per edge
+    vl = zeros(n - 1) #1 per edge
 
     #note major assumption: vor length determines undeformed config
-    for i=1:n-1
-        vl[i] = sqrt(dot(edges[:,i],edges[:,i]))
+    for i = 1:n-1
+        vl[i] = sqrt(dot(edges[:, i], edges[:, i]))
     end #loop
 
     vl_fin = vec(vl)
@@ -153,7 +153,7 @@ function timestep_axis(
     fixed_ends,
     constraint_func,
     gen_t,
-    imp_F
+    imp_F,
 )
     n = Int(param[1])
     l0 = param[2]
@@ -196,42 +196,42 @@ function timestep_axis(
     e4 = LinearAlgebra.normalize!(q4[4:6] - q4[1:3])
     u4 = rotab(tangent0, e4, u0)
 
-    x_fin = q0 + (1/6 * dt * (k1 + 2k2 + 2k3 + k4))
+    x_fin = q0 + (1 / 6 * dt * (k1 + 2k2 + 2k3 + k4))
     e_fin = LinearAlgebra.normalize!(x_fin[4:6] - x_fin[1:3])
     u_fin = rotab(tangent0, e_fin, u0)
 
     #fixing force on x_fin
     x_fin[3n-1:3n] = zeros(2)
-    x_fin[3n-1] = x_endpt_init[2]+ (imp_F* 0.1 * dt)
-    x_fin[3n-2] = x_endpt_init[1]+ (imp_F * dt)
+    # x_fin[3n-1] = x_endpt_init[2]+ (imp_F* 0.1 * dt)
+    x_fin[3n-2] = x_fin[3n-2] + (imp_F * dt)
 
     # println("this is ufin, xfin pre-projection")
-    init = vcat(u_fin,x_fin)
+    init = vcat(u_fin, x_fin)
 
     """
     CONSTRAINTS
     """
-    j =  0
+    j = 0
 
     #lumped model
     #init mass
     ℳ = n #total scalar mass
-    m_k = ℳ/n #assuming uniform rod
+    m_k = ℳ / n #assuming uniform rod
 
-    x = reshape(x_fin[1:3n], (3,n)) #reshape x, twist last row
+    x = reshape(x_fin[1:3n], (3, n)) #reshape x, twist last row
     theta_proj = x_fin[3n+1:end]
     edges = x[:, 2:end] - x[:, 1:end-1] #defining edges
 
     # #init generalized mass matrix
-    M = zeros(4n-3, 4n-3)
-    mass_dens = 1.
-    rad_edge = 1.
+    M = zeros(4n - 3, 4n - 3)
+    mass_dens = 1.0
+    rad_edge = 1.0
 
-    M[1:3n-3,1:3n-3] = m_k * Matrix(1.0I, 3n-3, 3n-3)
+    M[1:3n-3, 1:3n-3] = m_k * Matrix(1.0I, 3n - 3, 3n - 3)
 
     #moment of inertia defined on edges, cylindrical rod
     #this is assuming i know how to integrate
-    M[3n-2:4n-3, 3n-2:4n-3] = Matrix(1.0I,n,n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
+    M[3n-2:4n-3, 3n-2:4n-3] = Matrix(1.0I, n, n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
 
     #computing inverse
     #check if faster way to do this
@@ -240,7 +240,7 @@ function timestep_axis(
     C = constraint_func(x, theta_proj, l0, fixed_ends[1], fixed_ends[2], gen_t)
     C_abs = zeros(size(C)[1])
 
-    for i= 1:size(C)[1]
+    for i = 1:size(C)[1]
         C_abs[i] = abs(C[i])
     end #for
     maxC = maximum(C_abs)
@@ -262,22 +262,22 @@ function timestep_axis(
     while maxC >= err_tol
         #vectorize
         x = vec(x)
-        gradC = zeros(n-1 + 2 + 2,4*n - 3)
+        gradC = zeros(n - 1 + 2 + 2, 4 * n - 3)
 
         for r = 1:n-2
-            gradC[r, 3*(r-1)+1:3*(r-1)+3] = -2 * edges[:,r]
-            gradC[r, 3*(r-1)+4:3*(r-1)+6] = 2 * edges[:,r]
+            gradC[r, 3*(r-1)+1:3*(r-1)+3] = -2 * edges[:, r]
+            gradC[r, 3*(r-1)+4:3*(r-1)+6] = 2 * edges[:, r]
         end #for
 
         #NOTE gradC term for last vertex is removed
         #similarly, last vertex removed from mass matrix
-        gradC[n-1, 3*((n-1)-1)+1:3*((n-1)-1)+3] = -2 * edges[:,n-1]
+        gradC[n-1, 3*((n-1)-1)+1:3*((n-1)-1)+3] = -2 * edges[:, n-1]
 
         # v = l0 #v = velocity
         # trunc_len = 0.3
-        total_theta = 0.
+        total_theta = 0.0
 
-        fin_first= fixed_ends[1]
+        fin_first = fixed_ends[1]
         # fin_last = fixed_ends[2] - (gen_t * v) * [trunc_len;0.;trunc_len/5]
 
         #NOTE: theta terms remain unchanged
@@ -286,8 +286,8 @@ function timestep_axis(
         # gradC[n+1,3n-2:3n] = 2 * (x[3n-2:3n] - fin_last)
 
         #theta ==> changed
-        gradC[n+2,3(n-1)+1] = 2 * (theta_proj[1] - 0.)
-        gradC[n+3,end] = 2 * (theta_proj[end] - total_theta)
+        gradC[n+2, 3(n-1)+1] = 2 * (theta_proj[1] - 0.0)
+        gradC[n+3, end] = 2 * (theta_proj[end] - total_theta)
 
         #solving for lagrange multipliers
         gradC_t = transpose(gradC)
@@ -297,7 +297,7 @@ function timestep_axis(
         #note: G is sparse. Not quite banded (note staggered rows)
         # fin_det = det(G)
 
-        δλ = IterativeSolvers.lsmr(G,C,atol = btol = 10^-9)
+        δλ = IterativeSolvers.lsmr(G, C, atol = btol = 10^-9)
         δλ_next = δλ / dt^2
         δx_next = -dt^2 * (M_inv * gradC_t * δλ_next)
 
@@ -316,7 +316,7 @@ function timestep_axis(
         #______________re_init___________________
         #updating x, edges, C
         x_fin = x_next_fp
-        x_arr = reshape(x_fin[1:3n],(3,n))
+        x_arr = reshape(x_fin[1:3n], (3, n))
         x = x_fin[1:3n]
         theta_proj = x_fin[3n+1:end]
 
@@ -325,21 +325,28 @@ function timestep_axis(
 
         edges = x_arr[:, 2:end] - x_arr[:, 1:end-1] #defining edges
 
-        M = zeros(4n-3, 4n-3)
-        M[1:3n-3,1:3n-3] = m_k * Matrix(1.0I, 3n-3, 3n-3)
+        M = zeros(4n - 3, 4n - 3)
+        M[1:3n-3, 1:3n-3] = m_k * Matrix(1.0I, 3n - 3, 3n - 3)
 
         #moment of inertia defined on edges, cylindrical rod
         #this is assuming i know how to integrate
-        M[3n-2:4n-3, 3n-2:4n-3] = Matrix(1.0I,n,n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
+        M[3n-2:4n-3, 3n-2:4n-3] = Matrix(1.0I, n, n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
 
         #computing inverse
         #check if faster way to do this
         M_inv = inv(M)
 
-        C = constraint_func(x, theta_proj, l0, fixed_ends[1], fixed_ends[2], gen_t)
+        C = constraint_func(
+            x,
+            theta_proj,
+            l0,
+            fixed_ends[1],
+            fixed_ends[2],
+            gen_t,
+        )
         C_abs = zeros(size(C)[1])
 
-        for i= 1:size(C)[1]
+        for i = 1:size(C)[1]
             C_abs[i] = abs(C[i])
         end #for
         maxC = maximum(C_abs)
@@ -367,21 +374,32 @@ function timestep_axis(
     #h^2(∇C(x_j) M^-1 ∇C(x_j)^T)δλ_{j+1} = C(x_j)
 
     # package things use, and return the new state
-    x = reshape(x,(3,n))
+    x = reshape(x, (3, n))
 
-    e_fin_proj = LinearAlgebra.normalize!(x[:,2] - x[:,1])
+    e_fin_proj = LinearAlgebra.normalize!(x[:, 2] - x[:, 1])
     u_fin_proj = rotab(tangent0, e_fin_proj, u0)
 
     x_fin_proj = vec(x)
     u_fin_proj = vec(u_fin_proj)
 
-    fin_proj = Vector{Float64}(undef, 4n+3)
+    fin_proj = Vector{Float64}(undef, 4n + 3)
     fin_proj[1:3] = u_fin_proj
     fin_proj[4:3n+3] = x_fin_proj
     fin_proj[3n+4:end] = theta_proj
 
-    #calculating final f
-    f_prop = (fin_proj[4:end] - init_state)/dt
+    #calculating whether rod buckles
+    pos_delt = fin_proj[4:end] - init_state
+
+    for i = 1:3n-3
+        if abs(pos_delt[i]) > err_tol * (10)
+            crit_buck_F = (gen_t * imp_F) * (-1)
+            println("BUCKLE ALERT @ ", gen_t)
+            # println("FORCE ", crit_buck_F)
+        end #cond
+    end #loop
+
+    # crit_buck_F = gen_t * imp_F
+    f_prop = (fin_proj[4:end] - init_state) / dt
 
     #writing to text file
     io = open(txt_array[1], "a")
@@ -415,7 +433,7 @@ function timestep_stationary(
     err_tol,
     fixed_ends,
     constraint_func,
-    gen_t
+    gen_t,
 )
     n = Int(param[1])
     l0 = param[2]
@@ -453,26 +471,26 @@ function timestep_stationary(
     e4 = LinearAlgebra.normalize!(q4[4:6] - q4[1:3])
     u4 = rotab(tangent0, e4, u0)
 
-    x_fin = q0 + (1/6 * dt * (k1 + 2k2 + 2k3 + k4))
+    x_fin = q0 + (1 / 6 * dt * (k1 + 2k2 + 2k3 + k4))
     e_fin = LinearAlgebra.normalize!(x_fin[4:6] - x_fin[1:3])
     u_fin = rotab(tangent0, e_fin, u0)
 
     # println("this is ufin, xfin pre-projection")
-    init = vcat(u_fin,x_fin)
+    init = vcat(u_fin, x_fin)
     # println(vcat(u_fin,x_fin))
 
     """
     CONSTRAINTS
     """
 
-    j =  0
+    j = 0
 
     #lumped model
     #init mass
     ℳ = n #total scalar mass
-    m_k = ℳ/n #assuming uniform rod
+    m_k = ℳ / n #assuming uniform rod
 
-    x = reshape(x_fin[1:3n], (3,n)) #reshape x, twist last row
+    x = reshape(x_fin[1:3n], (3, n)) #reshape x, twist last row
     theta_proj = x_fin[3n+1:end]
     # println("theta_proj: ", theta_proj)
     edges = x[:, 2:end] - x[:, 1:end-1] #defining edges
@@ -481,14 +499,14 @@ function timestep_stationary(
 
     # #init generalized mass matrix
     M = zeros(4n, 4n)
-    mass_dens = 1.
-    rad_edge = 1.
+    mass_dens = 1.0
+    rad_edge = 1.0
 
-    M[1:3n,1:3n] = m_k * Matrix(1.0I, 3n, 3n)
+    M[1:3n, 1:3n] = m_k * Matrix(1.0I, 3n, 3n)
 
     #moment of inertia defined on edges, cylindrical rod
     #this is assuming i know how to integrate
-    M[3n+1:4n, 3n+1:4n] = Matrix(1.0I,n,n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
+    M[3n+1:4n, 3n+1:4n] = Matrix(1.0I, n, n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
 
     #computing inverse
     #check if faster way to do this
@@ -497,7 +515,7 @@ function timestep_stationary(
     C = constraint_func(x, theta_proj, l0, fixed_ends[1], fixed_ends[2], gen_t)
     C_abs = zeros(size(C)[1])
 
-    for i= 1:size(C)[1]
+    for i = 1:size(C)[1]
         C_abs[i] = abs(C[i])
     end #for
     maxC = maximum(C_abs)
@@ -525,14 +543,14 @@ function timestep_stationary(
         #2 ==> boundary
         #2 ==> boundary theta
 
-        gradC = zeros(n-1 + 2 + 2,4*n)
+        gradC = zeros(n - 1 + 2 + 2, 4 * n)
 
         #calculating gradient, must be changed depending on constraint
         #4:n+2
 
         for r = 1:n-1
-            gradC[r, 3*(r-1)+1:3*(r-1)+3] = -2 * edges[:,r]
-            gradC[r, 3*(r-1)+4:3*(r-1)+6] = 2 * edges[:,r]
+            gradC[r, 3*(r-1)+1:3*(r-1)+3] = -2 * edges[:, r]
+            gradC[r, 3*(r-1)+4:3*(r-1)+6] = 2 * edges[:, r]
         end #for
 
         # for r = 1:n
@@ -542,11 +560,11 @@ function timestep_stationary(
 
         #2
         gradC[n, 1:3] = 2 * (x[1:3] - fixed_ends[1])
-        gradC[n+1,3n-2:3n] = 2 * (x[3n-2:3n] - fixed_ends[2])
+        gradC[n+1, 3n-2:3n] = 2 * (x[3n-2:3n] - fixed_ends[2])
 
         #theta
-        gradC[n+2,3n+1] = 0.
-        gradC[n+3,end] = 0.
+        gradC[n+2, 3n+1] = 0.0
+        gradC[n+3, end] = 0.0
 
         gradC_t = transpose(gradC)
         G = gradC * M_inv * gradC_t
@@ -558,7 +576,7 @@ function timestep_stationary(
         # println("fin_det: ", fin_det)
         # G_inv = pinv(G) #check runtime
 
-        δλ = IterativeSolvers.lsmr(G,C, atol=btol=10^-9)
+        δλ = IterativeSolvers.lsmr(G, C, atol = btol = 10^-9)
         δλ_next = δλ / dt^2
         δx_next = -dt^2 * (M_inv * gradC_t * δλ_next)
 
@@ -572,7 +590,7 @@ function timestep_stationary(
         #______________re_init___________________
         #updating x, edges, C
         x_fin = x_next_fp
-        x_arr = reshape(x_fin[1:3n],(3,n))
+        x_arr = reshape(x_fin[1:3n], (3, n))
         x = x_fin[1:3n]
         theta_proj = x_fin[3n+1:end]
 
@@ -581,20 +599,27 @@ function timestep_stationary(
 
         edges = x_arr[:, 2:end] - x_arr[:, 1:end-1] #defining edges
 
-        M[1:3n,1:3n] = m_k * Matrix(1.0I, 3n, 3n)
+        M[1:3n, 1:3n] = m_k * Matrix(1.0I, 3n, 3n)
 
         #moment of inertia defined on edges, cylindrical rod
         #this is assuming i know how to integrate
-        M[3n+1:4n, 3n+1:4n] = Matrix(1.0I,n,n) #(mass_dens * rad_edge^3 * 2pi)/3 *
+        M[3n+1:4n, 3n+1:4n] = Matrix(1.0I, n, n) #(mass_dens * rad_edge^3 * 2pi)/3 *
 
         #computing inverse
         M_inv = inv(M)
 
         #initializing C
-        C = constraint_func(x, theta_proj, l0, fixed_ends[1], fixed_ends[2], gen_t)
+        C = constraint_func(
+            x,
+            theta_proj,
+            l0,
+            fixed_ends[1],
+            fixed_ends[2],
+            gen_t,
+        )
         C_abs = zeros(size(C)[1])
 
-        for i= 1:size(C)[1]
+        for i = 1:size(C)[1]
             C_abs[i] = abs(C[i])
         end #for
 
@@ -623,21 +648,21 @@ function timestep_stationary(
     #h^2(∇C(x_j) M^-1 ∇C(x_j)^T)δλ_{j+1} = C(x_j)
 
     # package things use, and return the new state
-    x = reshape(x,(3,n))
+    x = reshape(x, (3, n))
 
-    e_fin_proj = LinearAlgebra.normalize!(x[:,2] - x[:,1])
+    e_fin_proj = LinearAlgebra.normalize!(x[:, 2] - x[:, 1])
     u_fin_proj = rotab(tangent0, e_fin_proj, u0)
 
     x_fin_proj = vec(x)
     u_fin_proj = vec(u_fin_proj)
 
-    fin_proj = Vector{Float64}(undef, 4n+3)
+    fin_proj = Vector{Float64}(undef, 4n + 3)
     fin_proj[1:3] = u_fin_proj
     fin_proj[4:3n+3] = x_fin_proj
     fin_proj[3n+4:end] = theta_proj
 
     #calculating final f
-    f_prop = (fin_proj[4:end] - init_state)/dt
+    f_prop = (fin_proj[4:end] - init_state) / dt
 
     #writing to text file
     io = open(txt_array[1], "a")
@@ -669,9 +694,9 @@ misc. helper functions
 function twist_color(inp_theta)
     fin_col = zeros(size(inp_theta))
 
-    for i=1:size(inp_theta)[1]
-        col = mod(inp_theta[i], 2*pi)
-        col = col / (2*pi)
+    for i = 1:size(inp_theta)[1]
+        col = mod(inp_theta[i], 2 * pi)
+        col = col / (2 * pi)
         fin_col[i] = col
     end #for
 
@@ -697,14 +722,14 @@ function runsim_stationary(
     theta_0,
     u_0,
     constraint_type,
-    limits
+    limits,
 )
     println("%%%%%%%%%%%%", title, "%%%%%%%%%%%%%%%")
 
     #initializing text files
     max_txt = string(title, "_maxc", ".txt")
     vor_txt = string(title, "_vor", ".txt")
-    sum_f  = string(title, "_sum_f", ".txt")
+    sum_f = string(title, "_sum_f", ".txt")
 
     txt_array = [max_txt, vor_txt, sum_f]
 
@@ -740,37 +765,53 @@ function runsim_stationary(
 
     f = zeros(Float64, 4 * N)
 
-    plt = plot(aspect_ratio=:equal)
+    plt = plot(aspect_ratio = :equal)
     xlims!(limits[1])
     ylims!(limits[2])
     zlims!(limits[3])
     state = state_0[:]
     x_cur = reshape(state[4:3*(N+1)], (3, N))
-    x_1, x_2, x_3 = x_cur[1, :], x_cur[2, :], x_cur[3,:]
+    x_1, x_2, x_3 = x_cur[1, :], x_cur[2, :], x_cur[3, :]
     twist_weights = twist_color(theta_0)
 
     # println(twist_weights)
     for i = 1:N-1
         # scatter!(plt,  x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
         #         label = legend = false) #
-        plot!(plt, x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
-                label = legend = false, linewidth = 2,
-                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
+        plot!(
+            plt,
+            x_cur[1, i:i+1],
+            x_cur[2, i:i+1],
+            x_cur[3, i:i+1],
+            label = legend = false,
+            linewidth = 2,
+            linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+        )
     end #for loop #
 
     title!(title)
     display(plt)
 
-    force = 0.1
+    force = 0.01 #stationary
     function step!(gen_t)
-        state = timestep_stationary(F!, f, state, dt, param, txt_array, err_tol,
-                        [pos_0[:,1],pos_0[:,end]], constraint_type, gen_t)
+        state = timestep_stationary(
+            F!,
+            f,
+            state,
+            dt,
+            param,
+            txt_array,
+            err_tol,
+            [pos_0[:, 1], pos_0[:, end]],
+            constraint_type,
+            gen_t,
+        )
         t += dt
 
         x_cur = reshape(state[4:3*(N+1)], (3, N))
         # println("theta =", state[3N+4:end])
 
-        theta_cur = state[3*(N+1) + 1:end]
+        theta_cur = state[3*(N+1)+1:end]
         twist_weights = twist_color(theta_cur)
 
         # println("time: ", t)
@@ -778,26 +819,32 @@ function runsim_stationary(
         # println("this is x, timsetp 1: ", x_cur)
         # println("************** * * * BOINK *8*** *8**88   8 ")
 
-        plt = plot(aspect_ratio=:equal)
+        plt = plot(aspect_ratio = :equal)
         xlims!(limits[1])
         ylims!(limits[2])
         zlims!(limits[3])
         for i = 1:N-1
             # scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
             #         label = legend = false) #
-            plot!(plt,  x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
-                    label = legend = false, linewidth = 2,
-                    linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
+            plot!(
+                plt,
+                x_cur[1, i:i+1],
+                x_cur[2, i:i+1],
+                x_cur[3, i:i+1],
+                label = legend = false,
+                linewidth = 2,
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+            )
         end #for #
 
         title!(title)
     end #function
 
-    t = 0.
+    t = 0.0
     @time anim = @animate for i = 1:n_t
         step!(t)
     end every 10
-    gif(anim, string(title,".gif"), fps = 100)
+    gif(anim, string(title, ".gif"), fps = 100)
 
     # @time for i = 1:n_t
     #     step!(t)
@@ -822,14 +869,14 @@ function runsim_axis(
     theta_0,
     u_0,
     constraint_type,
-    limits
+    limits,
 )
     println("%%%%%%%%%%%%", title, "%%%%%%%%%%%%%%%")
 
     #initializing text files
     max_txt = string(title, "_maxc", ".txt")
     vor_txt = string(title, "_vor", ".txt")
-    sum_f  = string(title, "_sum_f", ".txt")
+    sum_f = string(title, "_sum_f", ".txt")
 
     txt_array = [max_txt, vor_txt, sum_f]
 
@@ -865,37 +912,54 @@ function runsim_axis(
 
     f = zeros(Float64, 4 * N)
 
-    plt = plot(aspect_ratio=:equal)
+    plt = plot(aspect_ratio = :equal)
     xlims!(limits[1])
     ylims!(limits[2])
     zlims!(limits[3])
     state = state_0[:]
     x_cur = reshape(state[4:3*(N+1)], (3, N))
-    x_1, x_2, x_3 = x_cur[1, :], x_cur[2, :], x_cur[3,:]
+    x_1, x_2, x_3 = x_cur[1, :], x_cur[2, :], x_cur[3, :]
     twist_weights = twist_color(theta_0)
 
     # println(twist_weights)
     for i = 1:N-1
         # scatter!(plt,  x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
         #         label = legend = false) #
-        plot!(plt, x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
-                label = legend = false, linewidth = 2,
-                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
+        plot!(
+            plt,
+            x_cur[1, i:i+1],
+            x_cur[2, i:i+1],
+            x_cur[3, i:i+1],
+            label = legend = false,
+            linewidth = 2,
+            linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+        )
     end #for loop #
 
     title!(title)
     display(plt)
 
-    force = 0.1
+    force = 0.02 #correct
     function step!(gen_t)
-        state = timestep_axis(F!, f, state, dt, param, txt_array, err_tol,
-                        [pos_0[:,1],pos_0[:,end]], constraint_type, gen_t, -force)
+        state = timestep_axis(
+            F!,
+            f,
+            state,
+            dt,
+            param,
+            txt_array,
+            err_tol,
+            [pos_0[:, 1], pos_0[:, end]],
+            constraint_type,
+            gen_t,
+            -force,
+        )
         t += dt
 
         x_cur = reshape(state[4:3*(N+1)], (3, N))
         # println("theta =", state[3N+4:end])
 
-        theta_cur = state[3*(N+1) + 1:end]
+        theta_cur = state[3*(N+1)+1:end]
         twist_weights = twist_color(theta_cur)
 
         # println("time: ", t)
@@ -903,26 +967,32 @@ function runsim_axis(
         # println("this is x, timsetp 1: ", x_cur)
         # println("************** * * * BOINK *8*** *8**88   8 ")
 
-        plt = plot(aspect_ratio=:equal)
+        plt = plot(aspect_ratio = :equal)
         xlims!(limits[1])
         ylims!(limits[2])
         zlims!(limits[3])
         for i = 1:N-1
             # scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
             #         label = legend = false) #
-            plot!(plt,  x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
-                    label = legend = false, linewidth = 2,
-                    linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]])
+            plot!(
+                plt,
+                x_cur[1, i:i+1],
+                x_cur[2, i:i+1],
+                x_cur[3, i:i+1],
+                label = legend = false,
+                linewidth = 2,
+                linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
+            )
         end #for #
 
         title!(title)
     end #function
 
-    t = 0.
+    t = 0.0
     @time anim = @animate for i = 1:n_t
         step!(t)
     end every 50
-    gif(anim, string(title,".gif"), fps = 100)
+    gif(anim, string(title, ".gif"), fps = 100)
 
     # @time for i = 1:n_t
     #     step!(t)
@@ -943,28 +1013,28 @@ function that generates constraints array as a function of position*
 """
 
 function constraint_twist(x_inp, theta_inp, vor1, start1, end1, t_cur)
-    n = size(vec(x_inp))[1]/3
+    n = size(vec(x_inp))[1] / 3
     n = Int(n)
 
     # println(theta_inp)
-    x_inp = reshape(x_inp,(3,n))
+    x_inp = reshape(x_inp, (3, n))
     edges = x_inp[:, 2:end] - x_inp[:, 1:end-1]
 
-    C = zeros(n-1) #1 per edge, 2 for endpoints
+    C = zeros(n - 1) #1 per edge, 2 for endpoints
     undeformed_config = vor1^2 #vor length, for now
 
     # CONSTRAINT 1: inextensibility
-    for i=1:n-1
-        C[i] = dot(edges[:,i],edges[:,i]) - undeformed_config
+    for i = 1:n-1
+        C[i] = dot(edges[:, i], edges[:, i]) - undeformed_config
         # println(C[i])
     end #loop
 
     C_fin = zeros(n - 1 + 4)
 
-    C_fin[n] = dot(x_inp[:,1] - start1,x_inp[:,1] - start1) #note first vertex initializes @ origin
-    C_fin[n+1] = dot(x_inp[:,end] - end1, x_inp[:,end] - end1)
-    C_fin[n+2] = (0.)^2
-    C_fin[n+3] = (theta_inp[end] - 0.)^2
+    C_fin[n] = dot(x_inp[:, 1] - start1, x_inp[:, 1] - start1) #note first vertex initializes @ origin
+    C_fin[n+1] = dot(x_inp[:, end] - end1, x_inp[:, end] - end1)
+    C_fin[n+2] = (0.0)^2
+    C_fin[n+3] = (theta_inp[end] - 0.0)^2
 
     C_fin[1:n-1] = C
 
@@ -975,27 +1045,27 @@ end #function
 # (x_inp, theta_inp, vor1, start1, end1, t_cur)
 
 function constraint_axis(x_inp, theta_inp, vor1, start1, end1, t_cur)
-    n = size(vec(x_inp))[1]/3
+    n = size(vec(x_inp))[1] / 3
     n = Int(n)
 
     # println(theta_inp)
-    x_inp = reshape(x_inp,(3,n))
+    x_inp = reshape(x_inp, (3, n))
     edges = x_inp[:, 2:end] - x_inp[:, 1:end-1]
 
-    C = zeros(n-1) #1 per edge, 2 for endpoints
+    C = zeros(n - 1) #1 per edge, 2 for endpoints
     undeformed_config = vor1^2 #vor length, for now
 
     # CONSTRAINT 1: inextensibility
-    for i=1:n-1
-        C[i] = (dot(edges[:,i],edges[:,i]) - undeformed_config)
+    for i = 1:n-1
+        C[i] = (dot(edges[:, i], edges[:, i]) - undeformed_config)
     end #loop
 
     C_fin = zeros(n - 1 + 4)
 
     v = vor1 #v = velocity
-    total_theta = 0.
+    total_theta = 0.0
 
-    C_fin[n] = dot(x_inp[:,1]-start1,x_inp[:,1]-start1) #note first vertex initializes @ origin
+    C_fin[n] = dot(x_inp[:, 1] - start1, x_inp[:, 1] - start1) #note first vertex initializes @ origin
     # C_fin[n+1] = dot(x_inp[:,end] - (end1 - (v * t_cur) * [trunc_len;0.;trunc_len/5]), x_inp[:,end] - (end1 - (v * t_cur) * [trunc_len;0.;trunc_len/5]))
     C_fin[n+2] = (theta_inp[1] - 0)^2
     C_fin[n+3] = (theta_inp[end] - total_theta)^2
@@ -1009,26 +1079,26 @@ function constraint_axis(x_inp, theta_inp, vor1, start1, end1, t_cur)
 end #function
 
 function constraint_stat(x_inp, theta_inp, vor1, start1, end1, t_cur)
-    n = size(vec(x_inp))[1]/3
+    n = size(vec(x_inp))[1] / 3
     n = Int(n)
 
     # println(theta_inp)
-    x_inp = reshape(x_inp,(3,n))
+    x_inp = reshape(x_inp, (3, n))
     edges = x_inp[:, 2:end] - x_inp[:, 1:end-1]
 
-    C = zeros(n-1) #1 per edge, 2 for endpoints
+    C = zeros(n - 1) #1 per edge, 2 for endpoints
     undeformed_config = vor1^2 #vor length, for now
 
     # CONSTRAINT 1: inextensibility
-    for i=1:n-1
-        C[i] = (dot(edges[:,i],edges[:,i]) - undeformed_config)
+    for i = 1:n-1
+        C[i] = (dot(edges[:, i], edges[:, i]) - undeformed_config)
     end #loop
 
     C_fin = zeros(n - 1 + 4)
-    total_theta = 0.
+    total_theta = 0.0
 
-    C_fin[n] = dot(x_inp[:,1]-start1,x_inp[:,1]-start1) #note first vertex initializes @ origin
-    C_fin[n+1] = dot(x_inp[:,end] - end1, x_inp[:,end] - end1)
+    C_fin[n] = dot(x_inp[:, 1] - start1, x_inp[:, 1] - start1) #note first vertex initializes @ origin
+    C_fin[n+1] = dot(x_inp[:, end] - end1, x_inp[:, end] - end1)
     C_fin[n+2] = (theta_inp[end] - 0)^2
     C_fin[n+3] = (theta_inp[end] - total_theta)^2
 
@@ -1037,6 +1107,24 @@ function constraint_stat(x_inp, theta_inp, vor1, start1, end1, t_cur)
     # println("C_fin: ", C_fin)
 
     return C_fin
+end #function
+
+"""
+init_ran() function
+    randomly perturbs rod in x,y,z plane
+    pos
+    theta
+    scale :: some 10^(-k) float
+"""
+
+function init_ran(pos, scale_pos)
+    pert_pos = rand(Float64, size(pos))
+    negation = rand([-1, 1], size(pos))
+    pert_pos = negation .* pert_pos
+
+    pert_pos = pert_pos * scale_pos
+    pos += pert_pos
+    return pos
 end #function
 
 """
@@ -1049,55 +1137,71 @@ function main()
     initial buckling stage
     """
 
-    buff = 1.
+    buff = 1.0
     name = "buckle_2_axial_t_big"
     dim = 3
     error_tolerance_C = 10^-3
-    timespan = (0.,2.)
-    num_tstep = 10^4
+    timespan = (0.0, 2.)
+    num_tstep = 10^3*2
     N_v = 5
-    vor = 1.
+    vor = 1.0
 
-    init_pos = zeros(3,N_v)
+    init_pos = zeros(3, N_v)
     init_theta = zeros(N_v)
     init_norm = [0.0, 1.0, 0.0]
 
-    tot_tw = 5*pi
+    tot_tw = 5 * pi
     for i = 1:N_v
-        init_pos[:,i] = [vor*i, 0., 0.]
-        init_theta[i] = 0.
+        init_pos[:, i] = [vor * i, 0.0, 0.0]
+        init_theta[i] = 0.0
     end #loop
 
-    lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
-            (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
-            (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
+    init_pos = init_ran(init_pos, 2 * 10^(-3))
+    init_theta = init_ran(init_theta, 10^(-6))
 
-    stat_state = runsim_axis(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
-            init_pos, init_theta, init_norm,
-            constraint_axis, lims)
+    lims = [
+        (minimum(init_pos[1, :]) - buff, maximum(init_pos[1, :]) + buff),
+        (minimum(init_pos[2, :]) - buff, maximum(init_pos[2, :]) + buff),
+        (minimum(init_pos[3, :]) - buff, maximum(init_pos[3, :]) + buff),
+    ]
 
-    """
-    evolution of rod in-place
-    """
+    stat_state = runsim_axis(
+        name,
+        dim,
+        error_tolerance_C,
+        timespan,
+        num_tstep,
+        N_v,
+        vor,
+        init_pos,
+        init_theta,
+        init_norm,
+        constraint_axis,
+        lims,
+    )
 
-    buff = 1.
-    name = "buckle_2_axial_STAT"
-    dim = 3
-    error_tolerance_C = 10^-3
-    timespan = (0.,1.)
-    num_tstep = 2*10^3
-    N_v = 5
-    vor = 1.
-
-    init_pos, init_theta, init_norm = state2vars(stat_state, N_v)
+    # """
+    # evolution of rod in-place
+    # """
     #
-    # lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
-    #         (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
-    #         (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
-
-    stat_state = runsim_stationary(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
-            init_pos, init_theta, init_norm,
-            constraint_stat, lims)
+    # buff = 1.
+    # name = "buckle_2_axial_STAT"
+    # dim = 3
+    # error_tolerance_C = 10^-3
+    # timespan = (0.,1.)
+    # num_tstep = 2*10^3
+    # N_v = 5
+    # vor = 1.
+    #
+    # init_pos, init_theta, init_norm = state2vars(stat_state, N_v)
+    # #
+    # # lims = [(minimum(init_pos[1,:]) - buff, maximum(init_pos[1,:]) + buff),
+    # #         (minimum(init_pos[2,:]) - buff, maximum(init_pos[2,:]) + buff),
+    # #         (minimum(init_pos[3,:]) - buff, maximum(init_pos[3,:]) + buff)]
+    #
+    # stat_state = runsim_stationary(name, dim, error_tolerance_C, timespan, num_tstep, N_v, vor,
+    #         init_pos, init_theta, init_norm,
+    #         constraint_stat, lims)
 
 end #func
 
