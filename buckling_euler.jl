@@ -1,15 +1,3 @@
-"""
-pseudocode / steps
-
-goal: specify endpoints, twist, and axial shortening
-
-"""
-## Buckling test
-## ISSUES
-# 1.
-##
-
-
 using Plots
 using ColorSchemes
 using Zygote
@@ -89,7 +77,6 @@ function energy_q(q, u0::Array{Float64,1}, p)
 end # function
 
 
-
 function skewmat(a::Array{Float64})
     return [0 -a[3] a[2]; a[3] 0 -a[1]; -a[2] a[1] 0]
 end # function
@@ -106,13 +93,9 @@ function rotab(a::Array{Float64,1}, b::Array{Float64,1}, c::Array{Float64,1})
     return u
 end # function
 
-
-
 function F!(f::Array{Float64,1}, q::Array{Float64,1}, u0, param)
     E = mu -> energy_q(mu, u0, param)
     f[:] = -1.0 * Zygote.gradient(E, q)[1]
-
-    # println("f: ", f)
 end
 
 """
@@ -159,6 +142,7 @@ function timestep_axis(
     l0 = param[2]
     x, theta, u0 = state2vars(state, n)
     init_state = state[4:end]
+    init_x = x
     # println("init_state, start of timestep: ", init_state)
 
     x_endpt_init = x[3n-2:3n]
@@ -201,10 +185,14 @@ function timestep_axis(
     u_fin = rotab(tangent0, e_fin, u0)
 
     #fixing force on x_fin
+    force_internal = x_fin[1:3n] - vec(init_x)
+    # println("this is force_internal: ", force_internal)
+
+    x_fin[1:3] = x[1:3]
     x_fin[3n-1:3n] = zeros(2)
     # x_fin[3n-1] = x_endpt_init[2]+ (imp_F* 0.1 * dt)
     x_fin[3n-2] = x_fin[3n-2] + (imp_F * dt)
-
+    x_pre_proj = x_fin[1:3n]
     # println("this is ufin, xfin pre-projection")
     init = vcat(u_fin, x_fin)
 
@@ -223,15 +211,17 @@ function timestep_axis(
     edges = x[:, 2:end] - x[:, 1:end-1] #defining edges
 
     # #init generalized mass matrix
-    M = zeros(4n - 3, 4n - 3)
+    M = zeros(4n - 6, 4n - 6)
     mass_dens = 1.0
     rad_edge = 1.0
 
-    M[1:3n-3, 1:3n-3] = m_k * Matrix(1.0I, 3n - 3, 3n - 3)
+    # mom_of_i = ((mass_dens * rad_edge^3 * 2*pi *l0)/3)I
+    mom_of_i = 1. * I
+    M[1:3n-6, 1:3n-6] = m_k * Matrix(mom_of_i, 3n - 6, 3n - 6)
 
     #moment of inertia defined on edges, cylindrical rod
     #this is assuming i know how to integrate
-    M[3n-2:4n-3, 3n-2:4n-3] = Matrix(1.0I, n, n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
+    M[3n-5:end, 3n-5:end] = Matrix(mom_of_i, n, n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
 
     #computing inverse
     #check if faster way to do this
@@ -256,23 +246,26 @@ function timestep_axis(
     writedlm(io, "* ", vor_len)
     close(io)
 
-    iteration = 1
+    itc = 1
 
+    cap = 100
     # while maxC >= err_tol || maxC <= -err_tol
     while maxC >= err_tol
         #vectorize
         x = vec(x)
-        gradC = zeros(n - 1 + 2 + 2, 4 * n - 3)
+        gradC = zeros(n - 1 + 2 + 2, 4 * n - 6)
 
-        for r = 1:n-2
-            gradC[r, 3*(r-1)+1:3*(r-1)+3] = -2 * edges[:, r]
-            gradC[r, 3*(r-1)+4:3*(r-1)+6] = 2 * edges[:, r]
+        for r = 2:n-2
+            gradC[r, 3*(r-2)+1:3*(r-2)+3] = -2 * edges[:, r]
+            gradC[r, 3*(r-2)+4:3*(r-2)+6] = 2 * edges[:, r]
         end #for
 
-        #NOTE gradC term for last vertex is removed
-        #similarly, last vertex removed from mass matrix
-        gradC[n-1, 3*((n-1)-1)+1:3*((n-1)-1)+3] = -2 * edges[:, n-1]
+        #NOTE gradC term for first and last vertex is removed
+        #similarly, first and last vertex removed from mass matrix
+        gradC[1, 1:3] = 2 * (edges[:, 1])
+        gradC[n-1, 3*((n-1)-2)+1:3*((n-1)-2)+3] = -2 * (edges[:, n-1])
 
+        # println(gradC)
         # v = l0 #v = velocity
         # trunc_len = 0.3
         total_theta = 0.0
@@ -282,11 +275,12 @@ function timestep_axis(
 
         #NOTE: theta terms remain unchanged
         #2
-        gradC[n, 1:3] = 2 * (x[1:3] - fin_first)
+        #Note we get rid of these terms
+        # gradC[n, 1:3] = 2 * (x[1:3] - fin_first)
         # gradC[n+1,3n-2:3n] = 2 * (x[3n-2:3n] - fin_last)
 
         #theta ==> changed
-        gradC[n+2, 3(n-1)+1] = 2 * (theta_proj[1] - 0.0)
+        gradC[n+2, 3(n-2)+1] = 2 * (theta_proj[1] - 0.0)
         gradC[n+3, end] = 2 * (theta_proj[end] - total_theta)
 
         #solving for lagrange multipliers
@@ -296,28 +290,33 @@ function timestep_axis(
         # println("G: ", G)
         #note: G is sparse. Not quite banded (note staggered rows)
         # fin_det = det(G)
+        # pinv_fin = inv(G)
+        # println("pinv_fin: ", pinv_fin)
 
-        δλ = IterativeSolvers.lsmr(G, C, atol = btol = 10^-9)
+        δλ = IterativeSolvers.lsmr(G, C, atol = btol = 10^-12)
         δλ_next = δλ / dt^2
         δx_next = -dt^2 * (M_inv * gradC_t * δλ_next)
 
+        #println("this is delta: ", δx_next)
         #x_next_fp is vec
-        x_next_fp_pos = x_fin[1:3n-3] + δx_next[1:3n-3]
-        x_next_fp_theta = x_fin[3n+1:end] + δx_next[3n-2:end]
+        x_next_fp_pos = x_fin[4:3n-3] + δx_next[1:3n-6]
+        x_next_fp_theta = x_fin[3n+1:end] + δx_next[3n-5:end]
 
         x_next_fp = zeros(4n)
-        x_next_fp[1:3n-3] = x_next_fp_pos
+        x_next_fp[4:3n-3] = x_next_fp_pos
         x_next_fp[3n+1:end] = x_next_fp_theta
+
+        x_next_fp[1:3] = x_fin[1:3]
         x_next_fp[3n-2:3n] = x_fin[3n-2:3n]
 
         # println("x_next_fp: ", x_next_fp)
-        j += 1
-        iteration += 1
+
         #______________re_init___________________
         #updating x, edges, C
         x_fin = x_next_fp
         x_arr = reshape(x_fin[1:3n], (3, n))
         x = x_fin[1:3n]
+        # println("this is x: ", x)
         theta_proj = x_fin[3n+1:end]
 
         # x_arr[:,1] = fixed_ends[1] + [(gen_t * dt), 0, 0]
@@ -325,12 +324,17 @@ function timestep_axis(
 
         edges = x_arr[:, 2:end] - x_arr[:, 1:end-1] #defining edges
 
-        M = zeros(4n - 3, 4n - 3)
-        M[1:3n-3, 1:3n-3] = m_k * Matrix(1.0I, 3n - 3, 3n - 3)
+        M = zeros(4n - 6, 4n - 6)
+        mass_dens = 1.0
+        rad_edge = 1.0
+        #
+        # mom_of_i = ((mass_dens * rad_edge^3 * 2*pi *l0)/3)I
+        mom_of_i = 1. * I
+        M[1:3n-6, 1:3n-6] = m_k * Matrix(mom_of_i, 3n - 6, 3n - 6)
 
         #moment of inertia defined on edges, cylindrical rod
         #this is assuming i know how to integrate
-        M[3n-2:4n-3, 3n-2:4n-3] = Matrix(1.0I, n, n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
+        M[3n-5:end, 3n-5:end] = Matrix(mom_of_i, n, n) #(mass_dens * rad_edge^3 * 2*pi)/3 *
 
         #computing inverse
         #check if faster way to do this
@@ -342,7 +346,7 @@ function timestep_axis(
             l0,
             fixed_ends[1],
             fixed_ends[2],
-            gen_t,
+            gen_t
         )
         C_abs = zeros(size(C)[1])
 
@@ -363,7 +367,16 @@ function timestep_axis(
         writedlm(io, "* ", vor_len)
         close(io)
 
+        itc += 1
+
+        if itc >= cap
+            println("%%%%%%%%%%%%%%%STUCK!!!!!!%%%%%%%%%%%%%%")
+            cap = cap*2
+        end #conditional
+
+        # println("this is itc", itc)
     end #while
+
 
     """
 
@@ -399,7 +412,8 @@ function timestep_axis(
     end #loop
 
     # crit_buck_F = gen_t * imp_F
-    f_prop = (fin_proj[4:end] - init_state) / dt
+    f_prop = x_fin_proj - x_pre_proj
+    # println("this is proj len: ", f_prop)
 
     #writing to text file
     io = open(txt_array[1], "a")
@@ -563,8 +577,8 @@ function timestep_stationary(
         gradC[n+1, 3n-2:3n] = 2 * (x[3n-2:3n] - fixed_ends[2])
 
         #theta
-        gradC[n+2, 3n+1] = 0.0
-        gradC[n+3, end] = 0.0
+        gradC[n+2, 3n+1] = 2*(theta_proj[1] - 0.)
+        gradC[n+3, end] = 2*(theta_proj[end] - 0.)
 
         gradC_t = transpose(gradC)
         G = gradC * M_inv * gradC_t
@@ -572,9 +586,6 @@ function timestep_stationary(
         # println("G: ", G)
         #note: G is sparse. Not quite banded (note staggered rows)
         fin_det = det(G)
-
-        # println("fin_det: ", fin_det)
-        # G_inv = pinv(G) #check runtime
 
         δλ = IterativeSolvers.lsmr(G, C, atol = btol = 10^-9)
         δλ_next = δλ / dt^2
@@ -661,13 +672,11 @@ function timestep_stationary(
     fin_proj[4:3n+3] = x_fin_proj
     fin_proj[3n+4:end] = theta_proj
 
-    #calculating final f
-    f_prop = (fin_proj[4:end] - init_state) / dt
+    #calculating projection vector
+    f_prop = x_fin_proj - x_fin
 
     #writing to text file
     io = open(txt_array[1], "a")
-    # write(io, maxC, "\n")
-    # C = constraint(x)
     write(io, "______ \n")
     write(io, "______ \n")
     close(io)
@@ -792,7 +801,7 @@ function runsim_stationary(
     title!(title)
     display(plt)
 
-    force = 0.01 #stationary
+    force = 1. #stationary
     function step!(gen_t)
         state = timestep_stationary(
             F!,
@@ -815,7 +824,7 @@ function runsim_stationary(
         twist_weights = twist_color(theta_cur)
 
         # println("time: ", t)
-        # println("this is theta, timsetp 1: ", theta_cur)
+        # # println("this is theta, timsetp 1: ", theta_cur)
         # println("this is x, timsetp 1: ", x_cur)
         # println("************** * * * BOINK *8*** *8**88   8 ")
 
@@ -876,7 +885,7 @@ function runsim_axis(
     #initializing text files
     max_txt = string(title, "_maxc", ".txt")
     vor_txt = string(title, "_vor", ".txt")
-    sum_f = string(title, "_sum_f", ".txt")
+    sum_f = string(title, "_proj_arr", ".txt")
 
     txt_array = [max_txt, vor_txt, sum_f]
 
@@ -921,6 +930,10 @@ function runsim_axis(
     x_1, x_2, x_3 = x_cur[1, :], x_cur[2, :], x_cur[3, :]
     twist_weights = twist_color(theta_0)
 
+
+    # xlims!(limits[2])
+    # ylims!(limits[3])
+    # # zlims!(limits[3])
     # println(twist_weights)
     for i = 1:N-1
         # scatter!(plt,  x_cur[1,i:i+1],x_cur[2,i:i+1], x_cur[3,i:i+1],
@@ -929,7 +942,7 @@ function runsim_axis(
             plt,
             x_cur[1, i:i+1],
             x_cur[2, i:i+1],
-            x_cur[3, i:i+1],
+            #x_cur[3, i:i+1],
             label = legend = false,
             linewidth = 2,
             linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
@@ -939,7 +952,8 @@ function runsim_axis(
     title!(title)
     display(plt)
 
-    force = 0.02 #correct
+    # force = 0.001 #correct NO BUCKLE
+    force = 0.3
     function step!(gen_t)
         state = timestep_axis(
             F!,
@@ -962,15 +976,19 @@ function runsim_axis(
         theta_cur = state[3*(N+1)+1:end]
         twist_weights = twist_color(theta_cur)
 
-        # println("time: ", t)
-        # println("this is theta, timsetp 1: ", theta_cur)
-        # println("this is x, timsetp 1: ", x_cur)
+        println("time: ", t)
+        # # println("this is theta, timsetp 1: ", theta_cur)
+        # # println("this is x, timsetp 1: ", x_cur)
         # println("************** * * * BOINK *8*** *8**88   8 ")
 
         plt = plot(aspect_ratio = :equal)
         xlims!(limits[1])
         ylims!(limits[2])
         zlims!(limits[3])
+        #
+        # xlims!(limits[2])
+        # ylims!(limits[3])
+        # # zlims!(limits[3])
         for i = 1:N-1
             # scatter!(plt, x_cur[1,i:i+1], x_cur[2,i:i+1], x_cur[3,i:i+1],
             #         label = legend = false) #
@@ -978,7 +996,7 @@ function runsim_axis(
                 plt,
                 x_cur[1, i:i+1],
                 x_cur[2, i:i+1],
-                x_cur[3, i:i+1],
+                #x_cur[3, i:i+1],
                 label = legend = false,
                 linewidth = 2,
                 linecolor = ColorSchemes.cyclic_mygbm_30_95_c78_n256_s25[twist_weights[i]],
@@ -1039,7 +1057,6 @@ function constraint_twist(x_inp, theta_inp, vor1, start1, end1, t_cur)
     C_fin[1:n-1] = C
 
     C_fin = vec(C_fin)
-    # println("Cfin = BOINK ", C_fin)
     return C_fin
 end #function
 # (x_inp, theta_inp, vor1, start1, end1, t_cur)
@@ -1065,7 +1082,7 @@ function constraint_axis(x_inp, theta_inp, vor1, start1, end1, t_cur)
     v = vor1 #v = velocity
     total_theta = 0.0
 
-    C_fin[n] = dot(x_inp[:, 1] - start1, x_inp[:, 1] - start1) #note first vertex initializes @ origin
+    #C_fin[n] = dot(x_inp[:, 1] - start1, x_inp[:, 1] - start1) #note first vertex initializes @ origin
     # C_fin[n+1] = dot(x_inp[:,end] - (end1 - (v * t_cur) * [trunc_len;0.;trunc_len/5]), x_inp[:,end] - (end1 - (v * t_cur) * [trunc_len;0.;trunc_len/5]))
     C_fin[n+2] = (theta_inp[1] - 0)^2
     C_fin[n+3] = (theta_inp[end] - total_theta)^2
@@ -1140,11 +1157,16 @@ function main()
     buff = 1.0
     name = "buckle_2_axial_t_big"
     dim = 3
+    # error_tolerance_C = 10^-5
+    # timespan = (0.0, 0.01)
+    # num_tstep = (2*10^4*0.01)*3
+    # N_v = 21
+    # vor = 1/5
     error_tolerance_C = 10^-3
-    timespan = (0.0, 2.)
-    num_tstep = 10^3*2
-    N_v = 5
-    vor = 1.0
+    timespan = (0.0, 1.)
+    num_tstep = 10^4
+    N_v = 21
+    vor = 1/5
 
     init_pos = zeros(3, N_v)
     init_theta = zeros(N_v)
@@ -1152,12 +1174,26 @@ function main()
 
     tot_tw = 5 * pi
     for i = 1:N_v
-        init_pos[:, i] = [vor * i, 0.0, 0.0]
+        init_pos[:, i] = [vor * (i-1), 0.0, 0.0]
         init_theta[i] = 0.0
     end #loop
 
-    init_pos = init_ran(init_pos, 2 * 10^(-3))
-    init_theta = init_ran(init_theta, 10^(-6))
+    # init_pos = init_ran(init_pos, 10^(-3))
+
+    #PERTURB IN Y/Z
+    pert_vec = [0., 10^-3, 0.]
+    init_pos[:,N_v - 1] += pert_vec
+    init_pos[:,N_v - 2] += pert_vec
+    # init_pos[:,N_v - 3] += pert_vec
+    #PERTURB IN Z
+    # init_pos[:,4] += [0., 0., 10^(-3)]
+    #init_theta = init_ran(init_theta, 10^(-6))
+
+    println("INIT POS: ", init_pos)
+
+    println("%%%%%8*%%***** %*%%%%%%%%*%%%%%   %*%*%%* % %*%*%*% ")
+    println("THIS IS PERT VEC ON X_4: ", pert_vec)
+
 
     lims = [
         (minimum(init_pos[1, :]) - buff, maximum(init_pos[1, :]) + buff),
@@ -1179,6 +1215,10 @@ function main()
         constraint_axis,
         lims,
     )
+
+    println("%%%%%8*%%***** %*%%%%%%%%*%%%%%   %*%*%%* % %*%*%*% ")
+    println("THIS IS PERT VEC ON X_4: ", pert_vec)
+    println("%%%%%8*%%***** %*%%%%%%%%*%%%%%   %*%*%%* % %*%*%*% ")
 
     # """
     # evolution of rod in-place
