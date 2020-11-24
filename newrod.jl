@@ -26,7 +26,7 @@ function skewmat(a::Array{Float64})
 end # function
 
 function normd(x)
-    return x / sqrt(x'x)
+    return x / sqrt(dot(x,x))
 end
 
 function energy(X, theta, u0, p, t)
@@ -248,7 +248,9 @@ function vars2state(
     return vcat(u0, vec(x), theta)
 end
 
-function state2vars(state::Array{Float64,1}, n::Integer)
+#bug: note that state2vars is for 3 vertex system
+
+function state2vars(state::Array{Float64,1}, n::Int64)
     pos = reshape(state[4:3*(n+1)], (3, n))
     theta = state[3*n+4:end]
     u0 = state[1:3]
