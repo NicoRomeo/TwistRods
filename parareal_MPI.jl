@@ -26,38 +26,6 @@ BASIC HELPER FUNCTIONS
     normd(vec) = 1/sqrt(dot(vec,vec)) .* vec
     dotv(vec) = sqrt(dot(vec,vec))
 end
-# function bst(n,l0,q;B = [1 0;0 1],mfac = 6,β =1., α=1.)
-#     # edges, tangent, kb, phi
-#     x = q[1:3*n]
-#     theta = q[3*n + 1:end]
-#     #init Ebend, stretch
-#     eL = q[4:6] - q[1:3]
-#     tL = normd(eL)
-#     Ebend = 0.0
-#     s = sqrt(eL'eL) .- l0
-#     Estretch = s * s #Estretch is edge value
-#     Etwist = 0.
-#     L̄ = 0.5 * tL
-#     for i = 1:n-2
-#         eC = q[3*(i+1)+1:3*(i+2)] - q[3*i+1:3*(i+1)] #current edge
-#         tC = normd(eC)
-#         kb = 2 .* cross(tL, tC) / (1 + tL'tC)
-#         ell = 0.5 * (sqrt(eL'eL) + sqrt(eC'eC))
-#         Ebend +=  α * dot(kb,kb)/ ell
-#         s = sqrt(eC'eC) .- l0
-#         Estretch += s * s
-#         L̄ += ell
-#         # update for next vertex
-#         eL,tL,m1,m2 = eC,tC,m1_1,m2_1
-#     end #loop
-#
-#     ell = 0.5 * normd(eL) #edge case
-#     L̄ += ell
-#     Ebend = 0.5 * Ebend * mfac
-#     Estretch = 0.5 * Estretch
-#     Etwist = β * (theta[end] - theta[1])^2 / (2 * L̄)
-#     return Ebend + Estretch + Etwist
-# end #function
 
 """
 ENERGY FUNCTION
@@ -204,11 +172,42 @@ function prrl_C(prob,Δt,algC,dts)
     return integrator.t,integrator.u
 end #function
 
-@everywhere function prrl_F(prob,Δt,algF,dts)
-    integrator = init(prob,algF;dt=dts,adaptive=false)
+@everywhere function prrl_Final(prob,Δt,algF,dts)
+    integrator = init(prob,algF;dt=dts,adaptive=false,save_everystep=true)
+    step!(integrator,Δt,true)
+    # println("integrator.sol specs: ",typeof(integrator.sol.u),size(integrator.sol.u))
+    # println("integrator.u specs: ",integrator.t)
+    # # println(hcat(integrator.sol.u...)')
+    # println("not broken")
+    cat = hcat(integrator.sol.u...)'
+    return integrator.t,integrator.u,cat,integrator.sol.t
+end #function
+
+@everywhere function prrl_F(prob,Δt,algF,dtF)
+    integrator = init(prob,algF;dt = dtF,adaptive=false)
     step!(integrator,Δt,true)
     return integrator.t,integrator.u
 end #function
+
+function Final_int(U_k,t_arr,p,algF,dtF,tcount;F = prrl_Final,g! = g!) #NOTE: insert array dim
+    tlen = length(t_arr)
+    F_up = SharedArray{Float64}(size(U_k))
+    fine_sol = SharedArray{Float64,3}(tcount,size(U_k)[2],tlen-1)
+    fine_sol_t = SharedArray{Float64,2}(tcount,tlen-1)
+    Δt = t_arr[2]
+    tspan = (0.,Δt)
+    # F_up = Array{Float64}(undef,tlen,size(U_k)[1],size(U_k)[2])
+    @sync @distributed for i = 1:tlen - 1
+        # println("is something happening")
+        q0 = U_k[i,:]
+        prob = ODEProblem(g!,q0,tspan,p) #how efficient is this?
+        # println(size(fine_sol))
+        # println(size(F(prob,Δt,algF,dtF)[3]))
+        # println("this is fine_sol slice size: ",size(fine_sol[:,:,i]))
+        temp,F_up[i+1,:],fine_sol[:,:,i],fine_sol_t[:,i] = F(prob,Δt,algF,dtF)
+    end # loop #that's hot
+    return F_up,fine_sol,fine_sol_t
+end #prrl F integrator
 
 function F_int(U_k,t_arr,p,algF,dtF;F = prrl_F,g! = g!) #NOTE: insert array dim
     tlen = length(t_arr)
@@ -217,7 +216,6 @@ function F_int(U_k,t_arr,p,algF,dtF;F = prrl_F,g! = g!) #NOTE: insert array dim
     tspan = (0.,Δt)
     # F_up = Array{Float64}(undef,tlen,size(U_k)[1],size(U_k)[2])
     @sync @distributed for i = 1:tlen - 1
-        # println("is something happening")
         q0 = U_k[i,:]
         prob = ODEProblem(g!,q0,tspan,p) #how efficient is this?
         F_up[i+1,:] = F(prob,Δt,algF,dtF)[2]
@@ -319,6 +317,33 @@ function c_crrt(U_k,t_arr,p,algF,algC,dtF,dtC;G = prrl_C, F = prrl_F)
     return U_kn,U_kn - U_k
 end #function
 
+function c_crrtFinal(U_k,t_arr,p,algF,algC,dtF,dtC,tcount;G = prrl_C, F = prrl_F)
+    U_kn = SharedArray{Float64}(size(U_k))
+    U_kn[1,:] = U_k[1,:]
+    # G_pr = init #NOTE: fix
+    tlen = length(t_arr)
+    # println("%%%()*%%%%%%%)(*#@)(*@#)(*@#)(&@#)(*@#)(*)%%%%%%%%%%%%")
+    # println("this is U_k: ", U_k)
+    F_net,fine_sol,fine_sol_t = Final_int(U_k,t_arr,p,algF,dtF,tcount)
+    G_net_p = G_int(U_k,t_arr,p,algC,dtC)
+    # println("this is F_net", F_net[:,end])
+    # println("this is G_net", G_net_p[:,end])
+    Δt = t_arr[2]
+    for i = 2:tlen
+        G_nk = G1(U_kn[i-1,:],t_arr,p,algC,dtC) #oh god
+        # println("%%%%%%%%%%%%%%%%%%%%%%")
+        # println("this is U_kn: ", U_kn[i-1,:])
+        # println("this is G_nk: ", G_nk)
+        # println("***")
+        # println("this is fine: ", F_net[i,:])
+        # println("***")
+        # println("this is coarse: ",G_net_p[i,:])
+        # println(G_nk,G_net_p[i,:])
+        U_kn[i,:] = G_nk + F_net[i,:] - G_net_p[i,:]
+    end #loop
+    return U_kn,U_kn - U_k,fine_sol,fine_sol_t
+end #function
+
 function c_crrtTw(U_k,t_arr,p;G = prrl_C, F = prrl_F)
     U_kn = SharedArray{Float64}(size(U_k))
     U_kn[1,:] = U_k[1,:]
@@ -346,12 +371,15 @@ function c_crrtTw(U_k,t_arr,p;G = prrl_C, F = prrl_F)
     return U_kn,U_kn - U_k
 end #function
 
-function net_sim(U_k,t_arr,p,k_count,algFi,algCo,dtF,dtC;crrt = c_crrt)
+function net_sim(U_k,t_arr,p,k_count,algFi,algCo,dtF,dtC,tcount;crrt = c_crrt)
     diff = Array{Float64}(undef,(size(U_k)[1],size(U_k)[2],k_count))
-    for k = 1:k_count
+    tlen = length(t_arr)
+    final_fine = Array{Any}(undef,tlen-1)
+    for k = 1:k_count-1
         U_k,diff[:,:,k] = c_crrt(U_k,t_arr,p,algFi,algCo,dtF,dtC)
     end #loop
-    return U_k,diff
+    U_k,diff[:,:,k_count],final_fine,final_fine_t = c_crrtFinal(U_k,t_arr,p,algFi,algCo,dtF,dtC,tcount)
+    return U_k,diff,final_fine,final_fine_t
 end #function
 
 function net_simTw(U_k,t_arr,p,k_count;c_crrtTw = c_crrtTw)
@@ -388,14 +416,19 @@ RUNNING SIM
 # k = 4
 # @time U_kfin,nnet = net_sim(U_k,tarr,p,k)
 
-function rodTest(inputArr,
+function rodTest!(inputArr,
                 tArr_PRRL,
                 tArr_CON,
                 algF,
                 algG,
                 dtF,
                 dtC,
-                tarr
+                tarr,
+                tcount,
+                Ukfin_WRAPPER,
+                nnet_WRAPPER,
+                finefinal_WRAPPER,
+                finalt_WRAPPER
 )
     l0 = 1.
     for i = 1:length(inputArr)
@@ -407,57 +440,103 @@ function rodTest(inputArr,
         prob = ODEProblem(g!,q0,tspan,p)
         solG_init = solve(prob,algG;dt = dtC,adaptive=false,saveat=tarr)
         U_k = SharedArray{Float64}((tlen,3*n))
-        for i = 1:tlen
-            U_k[i,:] = solG_init[i]
+        for j = 1:tlen
+            U_k[j,:] = solG_init[j]
         end #loop
         k = 4
         #warmup
-        global U_kfin,nnet = net_sim(U_k,tarr,p,k,algF,algG,dtF,dtC)
+        int_sol = net_sim(U_k,tarr,p,k,algF,algG,dtF,dtC,tcount)
+        Ukfin_WRAPPER[i],nnet_WRAPPER[i],finefinal_WRAPPER[i],finalt_WRAPPER[i] = int_sol
         println("hey")
-        println("this is nnet: $nnet")
-        tArr_PRRL[i] = @elapsed net_sim(U_k,tarr,p,k,algF,algG,dtF,dtC)
+        println("this is nnet: ",nnet_WRAPPER[i])
+        tArr_PRRL[i] = @elapsed net_sim(U_k,tarr,p,k,algF,algG,dtF,dtC,tcount)
         tArr_CON[i] = @elapsed solve(prob,algF;dt = dtF,adaptive=false,saveat=tarr)
         println("done with $i")
     end #loop
-    return U_kfin,nnet
 end #function
 
-inputArr = [5,10,15,20]
-inputArr = [25,30,35,40]
+inputArr = [5,5,5,5,5]
+# inputArr = [25,30,35,40]
 tArr_PRRL = Array{Float64}(undef,length(inputArr))
 tArr_CON = Array{Float64}(undef,length(inputArr))
+
 algF = RK4()
 algG = Euler()
 dtF = 10^(-5)
 dtC = 10^(-4)
 tarr = 0.:1.:10.
-rodTest(inputArr,tArr_PRRL,tArr_CON,algF,algG,dtF,dtC,tarr)
+tlen = length(tarr)
+in_len = length(inputArr)
+tcount = Int(round(1/dtF)) + 2 #NOTE: FIX
+
+Ukfin_WRAPPER = Array{Any}(undef,in_len)
+nnet_WRAPPER = Array{Any}(undef,in_len)
+finefinal_WRAPPER = Array{Any}(undef,in_len)
+finalt_WRAPPER = Array{Any}(undef,in_len)
+
+rodTest!(inputArr,tArr_PRRL,tArr_CON,algF,algG,dtF,dtC,tarr,tcount,Ukfin_WRAPPER,nnet_WRAPPER,finefinal_WRAPPER,finalt_WRAPPER)
+Ukfin_WRAPPER
+nnet_WRAPPER
+finefinal_WRAPPER
+finalt_WRAPPER
 tArr_CON
 tArr_PRRL
 
-#NOTE:
+"""
+PLOTS
+"""
+pl1 = plot()
+for i = 1:
+end #loop
+display(pl1)
 
 """
 SIMULATION 1, 12/27 12 AM
+    - using 6 cores
+
+    algF = RK4()
+    algG = Euler()
+    dtF = 10^(-5)
+    dtC = 10^(-4)
+    tarr = 0.:1.:10.
+
+    SOLVING DIRECTLY:
+    5: 28.178100216 s
+    10: 110.452675808 s
+    15: 323.369510414 s
+    20: 588.289440384 s
+    25: 942.404383938 s
+    30: 1217.519318214 s
+    35: 1626.384560602 s
+    40: 2180.000558705 s
+
+    SOLVING USING PRRL, 6 core computer:
+    5: 44.447938538 s
+    10: 163.32808088 s
+    15: 399.334093219 s
+    20: 711.000077901 s
+    25: 1215.970474558 s
+    30: 1611.954713998 s
+    35: 2111.612593471 s
+    40: 2873.794242304 s
 """
-algF = RK4()
-algG = Euler()
-dtF = 10^(-5)
-dtC = 10^(-4)
 
-SOLVING DIRECTLY:
-5: 28.178100216 s
-10: 110.452675808 s
-15: 323.369510414 s
-20: 588.289440384 s
+"""
+SIMULATION 2, 12/27 3 LM
 
-SOLVING USING PRRL, 6 core computer:
-5: 44.447938538 s
-10: 163.32808088 s
-15: 399.334093219 s
-20: 711.000077901 s
+TODO BEFORE SUPERCOMPUTER ACCESS:
+1. Parse in parallel fine solution, integrator interface? Not sure...
+2. Write as much of paper as possible.
 
+For 12/27:
+1. Parse in fine solution (1-2 hrs)
+2. Write up rod introduction, introduce parareal alg / read up (1-2 hrs)
 
+For 12/28:
+1. Code up visualization *sob* (1-2 hrs)
+2. Continue reading / witing up on parareal alg (1-2 hrs)
+
+"""
 # """
 # PLOTTING
 # """
