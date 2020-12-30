@@ -416,7 +416,8 @@ RUNNING SIM
 # k = 4
 # @time U_kfin,nnet = net_sim(U_k,tarr,p,k)
 
-function rodTest!(inputArr,
+function rodTest!(qinp,
+                inputArr,
                 tArr_PRRL,
                 tArr_CON,
                 algF,
@@ -436,7 +437,7 @@ function rodTest!(inputArr,
         tspan = (0.,tarr[end])
         tlen = length(tarr)
         p = (n,l0)
-        q0 = rand(Float64,3*n)
+        q0 = qinp[i]
         prob = ODEProblem(g!,q0,tspan,p)
         solG_init = solve(prob,algG;dt = dtC,adaptive=false,saveat=tarr)
         U_k = SharedArray{Float64}((tlen,3*n))
@@ -455,7 +456,28 @@ function rodTest!(inputArr,
     end #loop
 end #function
 
-inputArr = [5,5,5,5,5]
+function loop(v,rad)
+    X = zeros(Float64,3,v)
+    for i = 1:v
+        X[1,i] = rad * cos(2.0*pi*(i-1)/v)
+        X[2,i] = rad * sin(2.0*pi*(i-1)/v)
+    end #for loop
+    return vec(X)
+end #function
+# points = loop(10,1)[1]
+# points
+# plot(points[1,:],points[2,:],points[3,:])
+function randFill!(qinp,in_len,inputArr)
+    for i = 1:in_len
+        qinp[i] = rand(Float64,3 * inputArr[i])
+    end #loop
+end #function
+
+inputArr = [10]
+in_len = length(inputArr)
+qinp = Array{Array{Float64}}(undef,in_len)
+qinp[1] = loop(inputArr[1],1.)
+# randFill!(qinp,in_len,inputArr)
 # inputArr = [25,30,35,40]
 tArr_PRRL = Array{Float64}(undef,length(inputArr))
 tArr_CON = Array{Float64}(undef,length(inputArr))
@@ -466,7 +488,6 @@ dtF = 10^(-5)
 dtC = 10^(-4)
 tarr = 0.:1.:10.
 tlen = length(tarr)
-in_len = length(inputArr)
 tcount = Int(round(1/dtF)) + 2 #NOTE: FIX
 
 Ukfin_WRAPPER = Array{Any}(undef,in_len)
@@ -474,7 +495,7 @@ nnet_WRAPPER = Array{Any}(undef,in_len)
 finefinal_WRAPPER = Array{Any}(undef,in_len)
 finalt_WRAPPER = Array{Any}(undef,in_len)
 
-rodTest!(inputArr,tArr_PRRL,tArr_CON,algF,algG,dtF,dtC,tarr,tcount,Ukfin_WRAPPER,nnet_WRAPPER,finefinal_WRAPPER,finalt_WRAPPER)
+rodTest!(qinp,inputArr,tArr_PRRL,tArr_CON,algF,algG,dtF,dtC,tarr,tcount,Ukfin_WRAPPER,nnet_WRAPPER,finefinal_WRAPPER,finalt_WRAPPER)
 Ukfin_WRAPPER
 nnet_WRAPPER
 finefinal_WRAPPER
@@ -485,10 +506,32 @@ tArr_PRRL
 """
 PLOTS
 """
-pl1 = plot()
-for i = 1:
+#COURSE SOLN
+for i = 1:in_len
+    plt_temp = plot(tarr,Ukfin_WRAPPER[i])
+    temp_v = inputArr[i]
+    title!("Rod No. $i, $temp_v vertices")
+    display(plt_temp)
 end #loop
-display(pl1)
+
+using ColorSchemes
+tarr_fine = finalt_WRAPPER[1][:,1]
+colorArr = []
+finefinal_WRAPPER
+#FINE SOLN, NOTE: requires more k to converge
+for i = 1:in_len
+    plt_temp = plot(legend=false)
+    currFine = finefinal_WRAPPER[i]
+    for j = 1:tlen-1
+        adjTime = (tarr_fine[end] * (j - 1)) .+ tarr_fine
+        adjArray = Array{Float64}(undef,(length(adjTime),15))
+        adjArray .= adjTime
+        plot!(adjArray,currFine[:,:,j],color="blue")
+    end #loop
+    temp_v = inputArr[i]
+    title!("Rod No. $i, $temp_v vertices")
+    display(plt_temp)
+end #loop
 
 """
 SIMULATION 1, 12/27 12 AM
