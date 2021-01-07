@@ -1,6 +1,6 @@
 using Distributed
 rmprocs(workers())
-addprocs(6)
+addprocs(20)
 
 @everywhere begin
     using DifferentialEquations, LinearAlgebra
@@ -26,6 +26,19 @@ BASIC HELPER FUNCTIONS
     normd(vec) = 1/sqrt(dot(vec,vec)) .* vec
     dotv(vec) = sqrt(dot(vec,vec))
 end
+
+function twist_color(inp_theta)
+    fin_col = zeros(size(inp_theta))
+
+    for i = 1:size(inp_theta)[1]
+        col = mod(inp_theta[i], 2 * pi)
+        col = col / (2 * pi)
+        fin_col[i] = col
+    end #for
+
+    # println("fin_col: ", fin_col)
+    return fin_col
+end #function
 
 """
 ENERGY FUNCTION
@@ -168,13 +181,13 @@ TODO:
 """
 function prrl_C(prob,Δt,algC,dts)
     integrator = init(prob,algC;dt = dts,adaptive=false)
-    step!(integrator,Δt,true)
+    step!(integrator,Δt)
     return integrator.t,integrator.u
 end #function
 
 @everywhere function prrl_Final(prob,Δt,algF,dts)
     integrator = init(prob,algF;dt=dts,adaptive=false,save_everystep=true)
-    step!(integrator,Δt,true)
+    step!(integrator,Δt)
     # println("integrator.sol specs: ",typeof(integrator.sol.u),size(integrator.sol.u))
     # println("integrator.u specs: ",integrator.t)
     # # println(hcat(integrator.sol.u...)')
@@ -185,7 +198,7 @@ end #function
 
 @everywhere function prrl_F(prob,Δt,algF,dtF)
     integrator = init(prob,algF;dt = dtF,adaptive=false)
-    step!(integrator,Δt,true)
+    step!(integrator,Δt)
     return integrator.t,integrator.u
 end #function
 
@@ -416,7 +429,7 @@ RUNNING SIM
 # k = 4
 # @time U_kfin,nnet = net_sim(U_k,tarr,p,k)
 
-function rodTest!(qinp,
+function rodTest!(vorArr,qinp,
                 inputArr,
                 tArr_PRRL,
                 tArr_CON,
@@ -431,8 +444,8 @@ function rodTest!(qinp,
                 finefinal_WRAPPER,
                 finalt_WRAPPER
 )
-    l0 = 1.
     for i = 1:length(inputArr)
+        l0 = vorArr[i]
         n = inputArr[i]
         tspan = (0.,tarr[end])
         tlen = length(tarr)
@@ -444,9 +457,10 @@ function rodTest!(qinp,
         for j = 1:tlen
             U_k[j,:] = solG_init[j]
         end #loop
-        k = 4
+        k = 6
         #warmup
         int_sol = net_sim(U_k,tarr,p,k,algF,algG,dtF,dtC,tcount)
+        int_sol2 = solve(prob,algF;dt = dtF,adaptive=false,saveat=tarr)
         Ukfin_WRAPPER[i],nnet_WRAPPER[i],finefinal_WRAPPER[i],finalt_WRAPPER[i] = int_sol
         println("hey")
         println("this is nnet: ",nnet_WRAPPER[i])
@@ -454,6 +468,9 @@ function rodTest!(qinp,
         tArr_CON[i] = @elapsed solve(prob,algF;dt = dtF,adaptive=false,saveat=tarr)
         println("done with $i")
     end #loop
+end #function
+
+function zigzag()
 end #function
 
 function loop(v,rad)
@@ -464,6 +481,7 @@ function loop(v,rad)
     end #for loop
     return vec(X)
 end #function
+
 # points = loop(10,1)[1]
 # points
 # plot(points[1,:],points[2,:],points[3,:])
@@ -474,16 +492,20 @@ function randFill!(qinp,in_len,inputArr)
 end #function
 
 inputArr = [10]
+vorArr = [0.618]
 in_len = length(inputArr)
 qinp = Array{Array{Float64}}(undef,in_len)
 qinp[1] = loop(inputArr[1],1.)
+# qinp[2] = loop(inputArr[2],1.)
+# qinp[1] = rand(Float64,3 * inputArr[1])
+# qinp[2] = loop(inputArr[2],1.)
 # randFill!(qinp,in_len,inputArr)
 # inputArr = [25,30,35,40]
 tArr_PRRL = Array{Float64}(undef,length(inputArr))
 tArr_CON = Array{Float64}(undef,length(inputArr))
 
-algF = RK4()
-algG = Euler()
+algF = DP5()
+algG = RK4()
 dtF = 10^(-5)
 dtC = 10^(-4)
 tarr = 0.:1.:10.
@@ -495,7 +517,22 @@ nnet_WRAPPER = Array{Any}(undef,in_len)
 finefinal_WRAPPER = Array{Any}(undef,in_len)
 finalt_WRAPPER = Array{Any}(undef,in_len)
 
-rodTest!(qinp,inputArr,tArr_PRRL,tArr_CON,algF,algG,dtF,dtC,tarr,tcount,Ukfin_WRAPPER,nnet_WRAPPER,finefinal_WRAPPER,finalt_WRAPPER)
+rodTest!(vorArr,qinp,
+        inputArr,
+        tArr_PRRL,
+        tArr_CON,
+        algF,
+        algG,
+        dtF,
+        dtC,
+        tarr,
+        tcount,
+        Ukfin_WRAPPER,
+        nnet_WRAPPER,
+        finefinal_WRAPPER,
+        finalt_WRAPPER
+        )
+
 Ukfin_WRAPPER
 nnet_WRAPPER
 finefinal_WRAPPER
@@ -531,6 +568,18 @@ for i = 1:in_len
     temp_v = inputArr[i]
     title!("Rod No. $i, $temp_v vertices")
     display(plt_temp)
+end #loop
+
+"""
+ROD PLOT
+"""
+plt_temp = plot(legend=false)
+currFine = finefinal_WRAPPER[1]
+net_rows = (tlen - 1) * (tcount - 2)
+true_tc = tcount - 2
+net_frame = Array{Float64}(undef,(net_rows,30))
+for i = 1:tlen - 1
+    net_frame[(((i - 1) * true_tc) + 1): i * true_tc ,:] = currFine[1:end - 2,:,i]
 end #loop
 
 """
@@ -578,6 +627,10 @@ For 12/27:
 For 12/28:
 1. Code up visualization *sob* (1-2 hrs)
 2. Continue reading / witing up on parareal alg (1-2 hrs)
+
+For 12/31:
+1. Figure out parareal speedup, finalize job
+2. Figure out MPI / details spawning workers on remote processes
 
 """
 # """
