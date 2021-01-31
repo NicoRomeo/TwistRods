@@ -1,4 +1,4 @@
-import("submit.jl")
+include("submit.jl")
 
 """
 Example code to run simulation
@@ -20,6 +20,12 @@ q0[(3*(j - 1)) + 4:(3*(j - 1)) + 6] += [0.,0.,10^(-4)]
 tot_thet = 20 * pi
 q0[end-(n-1):end] = 0. : tot_thet/(n-1) : tot_thet
 
+#init. fine and coarse solvers
+algF = DP5()
+algG = RK4()
+dtF = 10^(-5)
+dtC = 10^(-4)
+
 #init. ODE problem
 tspan  = (0.,5.)
 tarr = 0.:0.0625:5. #1 time-interval per processor
@@ -29,12 +35,6 @@ prob = ODEProblem(gTw!,q0,tspan,p)
 
 #choosing diff. eq.
 f! = gTw!
-
-#init. fine and coarse solvers
-algF = DP5()
-algG = RK4()
-dtF = 10^(-5)
-dtC = 10^(-4)
 
 #init. # of parareal iterations
 kcount = 5
