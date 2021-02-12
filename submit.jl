@@ -5,11 +5,11 @@ Packages
 using Distributed
 using Plots; pyplot()
 using ColorSchemes, BenchmarkTools, DataFrames
-procs = 80
+procs = 10
 addprocs(procs)
 
 @everywhere begin
-    using DifferentialEquations, LinearAlgebra
+    using DifferentialEquations, LinearAlgebra, Quaternions
     using ForwardDiff
     using SharedArrays
 end
@@ -27,6 +27,7 @@ end
 Energy functions
     - b_st: isotropic case w/ bend only
         - returns E_bend + E_stretch
+        - note current code is incompatible w/ b_st-- requires adjusting
     - nn_eq: isotropic/anisotropic case w/ bend & twist
         - returns E_bend + E_twist + E_stretch
 """
@@ -49,7 +50,7 @@ Energy functions
     return Ebend + Estretch
 end #function
 
-@everywhere function nn_eq(n,l0,uq;tfac = 1.,sfac = 1.,B = [1 0;0 1],mfac = 1.)
+@everywhere function nn_eq(n,l0,uq;tfac = 1.,sfac = 100.,B = [1 0;0 1],mfac = 10.)
     # edges, tangent, kb, phi
     q = uq[4:end]
     mat_f = uq[1:3]
@@ -97,7 +98,8 @@ end #function
 Setting up Diff. eq
     - Force: returns force given energy function
     - g!: diff. eq. for isotropic rod w/ bend only
-    - gTw!: diff. eq. for isotropic/anisotropic rod w/ bend and twist
+    - gTw!: diff. eq. for clamped isotropic/anisotropic rod w/ bend and twist
+    - gTwF!: diff. eq. for free-ended isotropic/anisotropic rod w/ bend and twist
 """
 
 @everywhere function Force(n,l0,q;fxn = nn_eq)
@@ -135,6 +137,45 @@ end #function
     dq_int[end-1:end] = [0.,0.]
     du[:] .= 0.
 end #function
+
+@everywhere function gTwF!(duq,uq,p,t;nn_eq = nn_eq)
+    n,l0,f1,f2 = p
+    u = @view uq[1:3]
+    q_thet = @view uq[end-(n-1):end]
+    q_int = @view uq[7:end-(n-1)-4]
+    q_1st = @view uq[4:6]
+    q_2nd = @view uq[end-(n-1)-3:end-(n-1)-1]
+
+    du = @view duq[1:3]
+    dq_thet = @view duq[end-(n-1):end]
+    dq_int = @view duq[7:end-(n-1)-4]
+    dq_1st = @view duq[4:6]
+    dq_2nd = @view duq[end-(n-1)-3:end-(n-1)-1]
+
+    e_1st = q_int[1:3] - q_1st
+    t_1st = normd(e_1st)
+    # println("why do i have to do this")
+    # println("before: $u")
+    # u[:] -= t_1st * dot(t_1st,u)
+    # u[:] = normd(u[:])
+    # println("after: $u")
+
+    filler = -Force(n,l0,uq)
+    #adding external force, clamping ends of rod
+    dq_thet[:] = filler[end-(n-1):end]
+    dq_int[:] = filler[7:end-(n-1)-4]
+    dq_1st[:] = filler[4:6]
+    dq_2nd[:] = filler[end-(n-1)-3:end-(n-1)-1]
+
+    dq_Δ = dq_int[1:3] - dq_1st
+    γ = 2 * dot(e_1st,dq_Δ)
+    ρ = sqrt(dot(e_1st,e_1st))
+    dt = ((ρ * (dq_Δ)) - (e_1st * 0.5 * (1/(sqrt(dot(e_1st,e_1st)))) * γ)) / ρ^2
+    println("this is the diff: ", cross(cross(t_1st,dt),u))
+
+    du[:] = cross(cross(t_1st,dt),u)
+end #function
+
 
 """
 Components of parareal algorithm
@@ -248,7 +289,7 @@ function c_crrtFinal(U_k,t_arr,p,algF,algC,dtF,dtC,tcount;G = prrl_C, F = prrl_F
     return U_k,fine_sol
 end #function
 
-function net_sim(solF_true,U_k,t_arr,p,k_count,algFi,algCo,dtF,dtC,tcount)
+function net_sim(U_k,t_arr,p,k_count,algFi,algCo,dtF,dtC,tcount)
     tlen = length(t_arr)
     @inbounds for k = 1:k_count-1
         c_crrt!(U_k,t_arr,p,algFi,algCo,dtF,dtC)
